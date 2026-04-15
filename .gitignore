@@ -1,6 +1,7 @@
 target/
 
 .sisyphus/
+.worktrees/
 
 .DS_Store
 .idea/
