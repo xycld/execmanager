@@ -1,0 +1,2 @@
+[alias]
+verify = "test --workspace --all-targets -- --nocapture"

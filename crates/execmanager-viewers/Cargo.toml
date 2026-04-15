@@ -1,0 +1,12 @@
+[package]
+name = "execmanager-viewers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+execmanager-contracts = { path = "../execmanager-contracts" }
+execmanager-daemon = { path = "../execmanager-daemon" }
+
+[dev-dependencies]
+tempfile = "3.10"
