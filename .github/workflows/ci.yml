@@ -30,3 +30,39 @@ jobs:
 
       - name: Test workspace
         run: cargo test --workspace --all-targets -- --nocapture
+
+  build-snapshot:
+    needs: build-and-test
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: execmanager-linux-x86_64-snapshot
+            binary_name: execmanager
+          - os: macos-latest
+            artifact_name: execmanager-macos-snapshot
+            binary_name: execmanager
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build snapshot binary
+        run: cargo build -p execmanager-cli --release
+
+      - name: Copy snapshot artifact
+        run: cp target/release/${{ matrix.binary_name }} ${{ matrix.artifact_name }}
+
+      - name: Upload snapshot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}

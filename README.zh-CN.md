@@ -71,7 +71,7 @@ execmanager uninstall --restore
 
 ## 发布
 
-Pull request 和推送到 `main` 只运行 CI。
+Pull request 和推送到 `main` 会运行 CI，并产出可下载的 Linux/macOS snapshot 构建。
 推送类似 `v0.1.0` 的版本标签时，会触发 release workflow，并发布 Linux/macOS 的 `execmanager` 二进制文件。
 
 ## 当前限制

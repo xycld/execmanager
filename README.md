@@ -70,7 +70,7 @@ For a Chinese overview, installation notes, and command summary, see:
 
 ## Releases
 
-Pull requests and pushes to `main` run CI only.
+Pull requests and pushes to `main` run CI and publish downloadable Linux/macOS snapshot artifacts.
 Pushing a version tag like `v0.1.0` triggers the release workflow and publishes Linux/macOS `execmanager` binaries.
 
 ## Current limits
