@@ -1,0 +1,20 @@
+[package]
+name = "execmanager-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "execmanager"
+path = "src/main.rs"
+
+[dependencies]
+execmanager-contracts = { path = "../execmanager-contracts" }
+execmanager-daemon = { path = "../execmanager-daemon" }
+execmanager-host-kimi = { path = "../execmanager-host-kimi" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.37", features = ["macros", "rt-multi-thread", "process", "fs", "io-util", "time"] }
+
+[dev-dependencies]
+tempfile = "3.10"

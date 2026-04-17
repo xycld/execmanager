@@ -81,6 +81,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "execmanager-cli"
+version = "0.1.0"
+dependencies = [
+ "execmanager-contracts",
+ "execmanager-daemon",
+ "execmanager-host-kimi",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "execmanager-contracts"
 version = "0.1.0"
 dependencies = [
@@ -479,6 +492,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "signal-hook-registry"
+version = "1.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4db69cba1110affc0e9f7bcd48bbf87b3f4fc7c61fc9155afd4c469eb3d6c1b"
+dependencies = [
+ "errno",
+ "libc",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -524,9 +547,11 @@ version = "1.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a91135f59b1cbf38c91e73cf3386fca9bb77915c45ce2771460c9d92f0f3d776"
 dependencies = [
+ "bytes",
  "libc",
  "mio",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys",

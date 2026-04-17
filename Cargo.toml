@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/execmanager-contracts",
+    "crates/execmanager-cli",
     "crates/execmanager-host-kimi",
     "crates/execmanager-daemon",
     "crates/execmanager-platform",

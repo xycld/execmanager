@@ -12,7 +12,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use execmanager_contracts::{
     evaluate_handshake, CapabilityFlag, DaemonAuthResult, DaemonRequestEnvelope,
-    DaemonResponseEnvelope, ExecutionId, HandshakeResponse, LaunchAdmission, LaunchRequest,
+    DaemonResponseEnvelope, ExecutionId, HandshakeRequest, HandshakeResponse, LaunchAdmission, LaunchRequest,
     LaunchResponse, PeerIdentity, ProjectionState, RedactionMarker, RetentionClass,
 };
 use execmanager_platform::{
@@ -112,6 +112,35 @@ pub fn spawn_rpc_server(config: DaemonRpcConfig) -> io::Result<DaemonRpcServer> 
     })
 }
 
+pub async fn probe_rpc_readiness(socket_path: impl AsRef<Path>) -> io::Result<()> {
+    let stream = UnixStream::connect(socket_path.as_ref()).await?;
+    let mut framed = Framed::new(stream, LengthDelimitedCodec::new());
+    let handshake = DaemonRequestEnvelope::Handshake(HandshakeRequest::new("execmanager-cli"));
+    let payload = serde_json::to_vec(&handshake)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
+    framed.send(payload.into()).await?;
+
+    let frame = framed
+        .next()
+        .await
+        .transpose()?
+        .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "daemon closed without a readiness response"))?;
+    let response: DaemonResponseEnvelope = serde_json::from_slice(&frame)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
+
+    match response {
+        DaemonResponseEnvelope::Handshake(HandshakeResponse::Accepted(_)) => Ok(()),
+        DaemonResponseEnvelope::Handshake(HandshakeResponse::Rejected(rejected)) => Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!("daemon handshake rejected: {:?}", rejected.reason),
+        )),
+        other => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("unexpected daemon readiness response: {other:?}"),
+        )),
+    }
+}
+
 async fn run_rpc_server(
     listener: UnixListener,
     config: DaemonRpcConfig,
@@ -161,8 +190,10 @@ async fn handle_rpc_connection(stream: UnixStream, config: &DaemonRpcConfig) -> 
         return Ok(());
     }
 
-    let launch_request = match read_daemon_request(&mut framed).await? {
-        DaemonRequestEnvelope::Launch(request) => request,
+    let launch_request = match read_daemon_request(&mut framed).await {
+        Err(error) if error.kind() == io::ErrorKind::UnexpectedEof => return Ok(()),
+        Err(error) => return Err(error),
+        Ok(DaemonRequestEnvelope::Launch(request)) => request,
         other => {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
