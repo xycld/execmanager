@@ -1,10 +1,25 @@
-target/
+# Whitelist repository contents by default.
+# New files/directories are ignored unless explicitly allowed below.
+/*
 
-.sisyphus/
-.worktrees/
+# Keep the ignore file itself tracked.
+!/.gitignore
 
-.DS_Store
-.idea/
-.vscode/
-*.swp
-*.swo
+# Root files that belong in the repository.
+!/Cargo.toml
+!/Cargo.lock
+!/LICENSE
+!/README.md
+!/README.zh-CN.md
+
+# Tracked support/config directories.
+!/.cargo/
+!/.cargo/**
+!/.github/
+!/.github/workflows/
+!/.github/workflows/ci.yml
+!/.github/workflows/release.yml
+
+# Source tree.
+!/crates/
+!/crates/**

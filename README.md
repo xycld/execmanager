@@ -1,43 +1,80 @@
 # ExecManager
 
-ExecManager is a managed execution layer for code-agent-driven development workflows.
+[中文说明 / 中文版 README](README.zh-CN.md)
+
+ExecManager is a local installer-grade integration layer for Kimi Code.
+
+Run one command, set up the local hook + per-user daemon, use it normally, and remove it cleanly when you no longer want it.
+
+## Quick start
+
+Build and run:
+
+```bash
+cargo build -p execmanager-cli
+./target/debug/execmanager
+```
+
+Useful follow-up commands:
+
+```bash
+./target/debug/execmanager
+./target/debug/execmanager status
+./target/debug/execmanager doctor
+./target/debug/execmanager uninstall --restore
+```
 
 ## What it does
 
-- routes supported Kimi-hosted shell exec through a daemon-owned execution path
-- records append-only execution history and replayable projections
-- applies narrow fail-closed safety controls for destructive commands like `rm`
-- exposes Linux/macOS resource-governance state honestly
-- tracks service/port visibility, reconciliation state, TUI views, and attach-only viewer handles
+- installs the local Kimi integration
+- registers and manages a per-user daemon
+- keeps hook and service state explicit
+- supports safe uninstall and best-effort restore uninstall
 
-## Architecture
+## First run
 
-The system is structured as:
+When you run `execmanager` in an interactive terminal and it is not installed yet, it behaves like a local installer:
 
-- host ingress (`execmanager-host-kimi`)
-- daemon/source of truth (`execmanager-daemon`)
-- platform governance (`execmanager-platform`)
-- attach-only viewer adapters (`execmanager-viewers`)
-- projection-backed TUI (`execmanager-tui`)
+1. detects the current-user environment
+2. prepares the Kimi hook + per-user service plan
+3. asks for confirmation
+4. applies the install transaction
+5. starts the daemon path
+6. verifies readiness
 
-## Workspace layout
+If no interactive terminal is available, it does not apply changes silently. It prints guidance and asks you to rerun from an interactive terminal.
 
-- `crates/execmanager-contracts`
-- `crates/execmanager-host-kimi`
-- `crates/execmanager-daemon`
-- `crates/execmanager-platform`
-- `crates/execmanager-viewers`
-- `crates/execmanager-tui`
+## Command surface
 
-## Supported platforms
-
-- Linux
-- macOS
-
-## Verification commands
+The current CLI surface is:
 
 ```bash
-cargo verify
-cargo test --workspace --all-targets -- --nocapture
-cargo build --workspace
+execmanager
+execmanager init
+execmanager status
+execmanager doctor
+execmanager service start
+execmanager service stop
+execmanager service restart
+execmanager hooks install
+execmanager hooks repair
+execmanager uninstall
+execmanager uninstall --restore
 ```
+
+## Documentation
+
+For a Chinese overview, installation notes, and command summary, see:
+
+- [README.zh-CN.md](README.zh-CN.md)
+
+## Releases
+
+Pull requests and pushes to `main` run CI only.
+Pushing a version tag like `v0.1.0` triggers the release workflow and publishes Linux/macOS `execmanager` binaries.
+
+## Current limits
+
+- only `kimi` is supported as the selected adapter
+- macOS command mapping is implemented, but the current direct validation environment is still Linux-first
+- the product now has installer-grade core flows, but it is still actively evolving
