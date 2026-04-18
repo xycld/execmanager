@@ -8,7 +8,21 @@ Run one command, set up the local hook + per-user daemon, use it normally, and r
 
 ## Quick start
 
-Build and run:
+Install the latest released binary, then run the installer-grade setup flow:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xycld/execmanager/main/install.sh | bash
+execmanager
+```
+
+To install the latest CI snapshot build from `main` instead of the latest formal release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xycld/execmanager/main/install.sh | bash -s -- --snapshot
+execmanager
+```
+
+If you are developing locally instead of installing from a release:
 
 ```bash
 cargo build -p execmanager-cli
@@ -18,10 +32,10 @@ cargo build -p execmanager-cli
 Useful follow-up commands:
 
 ```bash
-./target/debug/execmanager
-./target/debug/execmanager status
-./target/debug/execmanager doctor
-./target/debug/execmanager uninstall --restore
+execmanager
+execmanager status
+execmanager doctor
+execmanager uninstall --restore
 ```
 
 ## What it does
@@ -68,10 +82,14 @@ For a Chinese overview, installation notes, and command summary, see:
 
 - [README.zh-CN.md](README.zh-CN.md)
 
-## Releases
+## Release install vs snapshot artifacts
 
-Pull requests and pushes to `main` run CI and publish downloadable Linux/macOS snapshot artifacts.
-Pushing a version tag like `v0.1.0` triggers the release workflow and publishes Linux/macOS `execmanager` binaries.
+The install script downloads the latest GitHub Release binary for Linux/macOS.
+
+Pull requests and pushes to `main` run CI and publish snapshot artifacts for testing and early validation.
+Pushing a version tag like `v0.1.0` triggers the release workflow and publishes Linux/macOS `execmanager` binaries for normal installation.
+
+`install.sh --snapshot` is the explicit opt-in path for installing the latest snapshot build from CI. The default install path remains the latest formal GitHub Release.
 
 ## Current limits
 

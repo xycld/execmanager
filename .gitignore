@@ -11,6 +11,9 @@
 !/LICENSE
 !/README.md
 !/README.zh-CN.md
+!/install.sh
+!/tests/
+!/tests/**
 
 # Tracked support/config directories.
 !/.cargo/

@@ -8,7 +8,21 @@ ExecManager 是一个面向 Kimi Code 的本地 installer-grade 集成层。
 
 ## 快速开始
 
-先构建并运行：
+先通过官方安装脚本安装最新 release 二进制，然后运行本地安装流程：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xycld/execmanager/main/install.sh | bash
+execmanager
+```
+
+如果你想安装 `main` 上最新成功 CI 的 snapshot 测试版，而不是最新正式 release：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xycld/execmanager/main/install.sh | bash -s -- --snapshot
+execmanager
+```
+
+如果你是在本地开发，而不是从 release 安装：
 
 ```bash
 cargo build -p execmanager-cli
@@ -18,10 +32,10 @@ cargo build -p execmanager-cli
 后续常用命令：
 
 ```bash
-./target/debug/execmanager
-./target/debug/execmanager status
-./target/debug/execmanager doctor
-./target/debug/execmanager uninstall --restore
+execmanager
+execmanager status
+execmanager doctor
+execmanager uninstall --restore
 ```
 
 ## 它能做什么
@@ -69,10 +83,14 @@ execmanager uninstall --restore
 
 - [English README](README.md)
 
-## 发布
+## Release 安装与 snapshot 制品
 
-Pull request 和推送到 `main` 会运行 CI，并产出可下载的 Linux/macOS snapshot 构建。
-推送类似 `v0.1.0` 的版本标签时，会触发 release workflow，并发布 Linux/macOS 的 `execmanager` 二进制文件。
+安装脚本默认下载 GitHub Releases 中最新的 Linux/macOS 二进制。
+
+Pull request 和推送到 `main` 会运行 CI，并产出用于测试和提前验证的 snapshot 制品。
+推送类似 `v0.1.0` 的版本标签时，会触发 release workflow，并发布面向正常安装的 Linux/macOS `execmanager` 二进制文件。
+
+`install.sh --snapshot` 是显式安装最新 snapshot 测试版的入口。默认安装路径仍然是最新正式 GitHub Release。
 
 ## 当前限制
 
