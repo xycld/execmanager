@@ -18,9 +18,22 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
+
+      - name: Reject Rust lint suppressions
+        shell: bash
+        run: |
+          if git grep -nE '#!\[allow\(|#\[allow\(|#\[expect\(' -- '*.rs'; then
+            echo 'Rust lint suppressions are not allowed in CI.'
+            exit 1
+          fi
+
+      - name: Lint workspace
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Build workspace
         run: cargo build --workspace

@@ -457,25 +457,27 @@ impl GovernanceEnvironment {
     pub fn current() -> Self {
         #[cfg(target_os = "linux")]
         {
-            return Self::linux_for_tests("/sys/fs/cgroup");
+            Self::linux_for_tests("/sys/fs/cgroup")
         }
 
         #[cfg(target_os = "macos")]
         {
-            return Self {
+            Self {
                 platform: GovernancePlatform::MacOs,
                 linux_cgroup_root: None,
                 macos_observation_root: None,
                 macos_setrlimit_best_effort: true,
-            };
+            }
         }
 
-        #[allow(unreachable_code)]
-        Self {
-            platform: GovernancePlatform::Unsupported,
-            linux_cgroup_root: None,
-            macos_observation_root: None,
-            macos_setrlimit_best_effort: false,
+        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        {
+            Self {
+                platform: GovernancePlatform::Unsupported,
+                linux_cgroup_root: None,
+                macos_observation_root: None,
+                macos_setrlimit_best_effort: false,
+            }
         }
     }
 }

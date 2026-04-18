@@ -73,7 +73,7 @@ pub fn render_screen(
         .as_deref()
         .and_then(|exec_id| projection.execution(exec_id));
 
-    let sections = vec![
+    let sections = [
         render_instances(projection, &exec_ids, selected_exec_id.as_deref()),
         render_services(projection, &history, selected_exec_id.as_deref()),
         render_history(&history, selected_exec_id.as_deref()),

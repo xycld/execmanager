@@ -11,9 +11,9 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use execmanager_contracts::{
-    evaluate_handshake, CapabilityFlag, DaemonAuthResult, DaemonRequestEnvelope,
-    DaemonResponseEnvelope, ExecutionId, HandshakeRequest, HandshakeResponse, LaunchAdmission, LaunchRequest,
-    LaunchResponse, PeerIdentity, ProjectionState, RedactionMarker, RetentionClass,
+    CapabilityFlag, DaemonAuthResult, DaemonRequestEnvelope, DaemonResponseEnvelope, ExecutionId,
+    HandshakeRequest, HandshakeResponse, LaunchAdmission, LaunchRequest, LaunchResponse,
+    PeerIdentity, ProjectionState, RedactionMarker, RetentionClass, evaluate_handshake,
 };
 use execmanager_platform::{
     GovernanceCoordinator, GovernanceRequest, GovernanceSnapshot, ResourceProfile,
@@ -81,7 +81,7 @@ impl DaemonRpcServer {
         let result = self
             .task
             .await
-            .map_err(|error| io::Error::new(io::ErrorKind::Other, error.to_string()))?;
+            .map_err(|error| io::Error::other(error.to_string()))?;
 
         match fs::remove_file(&self.socket_path) {
             Ok(()) => {}
@@ -120,20 +120,23 @@ pub async fn probe_rpc_readiness(socket_path: impl AsRef<Path>) -> io::Result<()
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
     framed.send(payload.into()).await?;
 
-    let frame = framed
-        .next()
-        .await
-        .transpose()?
-        .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "daemon closed without a readiness response"))?;
+    let frame = framed.next().await.transpose()?.ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "daemon closed without a readiness response",
+        )
+    })?;
     let response: DaemonResponseEnvelope = serde_json::from_slice(&frame)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
 
     match response {
         DaemonResponseEnvelope::Handshake(HandshakeResponse::Accepted(_)) => Ok(()),
-        DaemonResponseEnvelope::Handshake(HandshakeResponse::Rejected(rejected)) => Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            format!("daemon handshake rejected: {:?}", rejected.reason),
-        )),
+        DaemonResponseEnvelope::Handshake(HandshakeResponse::Rejected(rejected)) => {
+            Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                format!("daemon handshake rejected: {:?}", rejected.reason),
+            ))
+        }
         other => Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!("unexpected daemon readiness response: {other:?}"),
@@ -227,11 +230,11 @@ async fn launch_managed_execution(
         let mut executor = ManagedExecutor::new(&journal_path)?;
         let child = executor
             .launch(spec)
-            .map_err(|error| io::Error::new(io::ErrorKind::Other, error.to_string()))?;
+            .map_err(|error| io::Error::other(error.to_string()))?;
         Ok::<_, io::Error>((exec_id, child))
     })
     .await
-    .map_err(|error| io::Error::new(io::ErrorKind::Other, error.to_string()))??;
+    .map_err(|error| io::Error::other(error.to_string()))??;
 
     tokio::task::spawn_blocking(move || {
         let _ = managed_child.observe_runtime_facts(runtime_observation_timeout);
@@ -241,7 +244,10 @@ async fn launch_managed_execution(
     Ok(exec_id)
 }
 
-fn managed_launch_spec_from_command(exec_id: ExecutionId, command: &str) -> io::Result<ManagedLaunchSpec> {
+fn managed_launch_spec_from_command(
+    exec_id: ExecutionId,
+    command: &str,
+) -> io::Result<ManagedLaunchSpec> {
     let argv = split_launch_command(command)?;
     let (program, args) = argv
         .split_first()
@@ -264,7 +270,11 @@ fn split_launch_command(command: &str) -> io::Result<Vec<String>> {
         ));
     }
 
-    if command.contains('"') || command.contains('\'') || command.contains("$(") || command.contains('`') {
+    if command.contains('"')
+        || command.contains('\'')
+        || command.contains("$(")
+        || command.contains('`')
+    {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "launch command requires unsupported shell parsing",
@@ -294,9 +304,7 @@ fn authenticate_peer(stream: &UnixStream) -> io::Result<DaemonAuthResult> {
 
     if peer_uid != daemon_uid {
         return Ok(DaemonAuthResult::Unauthenticated {
-            reason: format!(
-                "peer uid {peer_uid} does not match daemon uid {daemon_uid}"
-            ),
+            reason: format!("peer uid {peer_uid} does not match daemon uid {daemon_uid}"),
         });
     }
 
@@ -334,11 +342,12 @@ fn current_username_for_uid(user_id: u32) -> Option<String> {
 async fn read_daemon_request(
     framed: &mut Framed<UnixStream, LengthDelimitedCodec>,
 ) -> io::Result<DaemonRequestEnvelope> {
-    let frame = framed
-        .next()
-        .await
-        .transpose()?
-        .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "daemon client closed without sending a request"))?;
+    let frame = framed.next().await.transpose()?.ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "daemon client closed without sending a request",
+        )
+    })?;
 
     serde_json::from_slice(&frame)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))
@@ -753,12 +762,10 @@ impl ManagedExecutor {
     }
 
     fn append_event(&self, event: JournalEvent) -> Result<(), ManagedExecError> {
-        let mut journal = self.journal.lock().map_err(|_| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                "managed executor journal mutex poisoned",
-            )
-        })?;
+        let mut journal = self
+            .journal
+            .lock()
+            .map_err(|_| io::Error::other("managed executor journal mutex poisoned"))?;
         journal.append(&event)?;
         Ok(())
     }
@@ -777,12 +784,10 @@ impl ManagedExecutor {
     }
 
     fn spool_root_for(&self, exec_id: &ExecutionId) -> Result<PathBuf, ManagedExecError> {
-        let journal = self.journal.lock().map_err(|_| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                "managed executor journal mutex poisoned",
-            )
-        })?;
+        let journal = self
+            .journal
+            .lock()
+            .map_err(|_| io::Error::other("managed executor journal mutex poisoned"))?;
         Ok(journal
             .path()
             .parent()
@@ -843,9 +848,10 @@ impl ManagedChild {
                             .collect(),
                     };
 
-                    let mut journal = self.journal.lock().map_err(|_| {
-                        io::Error::new(io::ErrorKind::Other, "managed child journal mutex poisoned")
-                    })?;
+                    let mut journal = self
+                        .journal
+                        .lock()
+                        .map_err(|_| io::Error::other("managed child journal mutex poisoned"))?;
 
                     for listener in &listeners {
                         journal.append(&JournalEvent::PortObserved {
@@ -931,18 +937,25 @@ impl ManagedChild {
         let manifest = build_history_snapshot_manifest(
             &self.exec_id,
             &self.env_snapshot,
-            &self.persisted_original_command,
-            self.persisted_rewritten_command.clone(),
-            ProjectionState::Exited,
-            status.code(),
-            status.success(),
-            stdout_blob.clone(),
-            stderr_blob.clone(),
+            HistorySnapshotManifestInput {
+                persisted_original_command: &self.persisted_original_command,
+                persisted_rewritten_command: self.persisted_rewritten_command.clone(),
+                observed: SnapshotObservedFacts {
+                    final_state: ProjectionState::Exited,
+                    exit_code: status.code(),
+                    success: status.success(),
+                },
+                artifacts: SnapshotArtifacts {
+                    stdout: stdout_blob.clone(),
+                    stderr: stderr_blob.clone(),
+                },
+            },
         );
 
-        let mut journal = self.journal.lock().map_err(|_| {
-            io::Error::new(io::ErrorKind::Other, "managed child journal mutex poisoned")
-        })?;
+        let mut journal = self
+            .journal
+            .lock()
+            .map_err(|_| io::Error::other("managed child journal mutex poisoned"))?;
         journal.append(&JournalEvent::ExecutionStateUpdated {
             exec_id: self.exec_id.clone(),
             state: ProjectionState::Exited,
@@ -950,7 +963,7 @@ impl ManagedChild {
         journal.append(&JournalEvent::HistorySnapshotRecorded {
             exec_id: self.exec_id.clone(),
             env_snapshot: self.env_snapshot.clone(),
-            manifest,
+            manifest: Box::new(manifest),
         })?;
 
         Ok(Output {
@@ -986,7 +999,7 @@ impl BackgroundCapture {
 
         let result = handle
             .join()
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "spool reader thread panicked"))?;
+            .map_err(|_| io::Error::other("spool reader thread panicked"))?;
         result.map_err(CaptureError::from)
     }
 }
@@ -1226,8 +1239,15 @@ pub enum JournalEvent {
     HistorySnapshotRecorded {
         exec_id: ExecutionId,
         env_snapshot: EnvironmentSnapshotRecord,
-        manifest: HistorySnapshotManifest,
+        manifest: Box<HistorySnapshotManifest>,
     },
+}
+
+struct HistorySnapshotManifestInput<'a> {
+    persisted_original_command: &'a str,
+    persisted_rewritten_command: Option<String>,
+    observed: SnapshotObservedFacts,
+    artifacts: SnapshotArtifacts,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1999,7 +2019,7 @@ impl RuntimeProjection {
                     execution.stderr = stderr;
                 }
                 self.env_snapshots.insert(key.clone(), env_snapshot);
-                self.history_manifests.insert(key, manifest);
+                self.history_manifests.insert(key, *manifest);
             }
         }
     }
@@ -2120,13 +2140,7 @@ fn build_environment_snapshot(
 fn build_history_snapshot_manifest(
     exec_id: &ExecutionId,
     env_snapshot: &EnvironmentSnapshotRecord,
-    persisted_original_command: &str,
-    persisted_rewritten_command: Option<String>,
-    final_state: ProjectionState,
-    exit_code: Option<i32>,
-    success: bool,
-    stdout: Option<RetainedArtifact>,
-    stderr: Option<RetainedArtifact>,
+    input: HistorySnapshotManifestInput<'_>,
 ) -> HistorySnapshotManifest {
     HistorySnapshotManifest {
         snapshot_id: format!("snapshot-{}", exec_id.as_str()),
@@ -2137,21 +2151,17 @@ fn build_history_snapshot_manifest(
             lineage_root_exec_id: exec_id.clone(),
         },
         intent: SnapshotIntentRecord {
-            original_command: persisted_original_command.to_string(),
+            original_command: input.persisted_original_command.to_string(),
         },
         launch: SnapshotLaunchRecord {
-            rewritten_command: persisted_rewritten_command,
+            rewritten_command: input.persisted_rewritten_command,
         },
-        observed: SnapshotObservedFacts {
-            final_state,
-            exit_code,
-            success,
-        },
+        observed: input.observed,
         environment: SnapshotEnvironmentReference {
             record_id: env_snapshot.record_id.clone(),
             redaction: env_snapshot.redaction.clone(),
         },
-        artifacts: SnapshotArtifacts { stdout, stderr },
+        artifacts: input.artifacts,
         host: SnapshotHostMetadata {
             platform: std::env::consts::OS.to_string(),
             arch: std::env::consts::ARCH.to_string(),
@@ -2639,11 +2649,7 @@ fn process_group_id_for(pid: u32) -> Result<u32, ManagedExecError> {
 
 fn session_id_for(pid: u32) -> Option<u32> {
     let sid = unsafe { libc::getsid(pid as libc::pid_t) };
-    if sid < 0 {
-        None
-    } else {
-        Some(sid as u32)
-    }
+    if sid < 0 { None } else { Some(sid as u32) }
 }
 
 fn process_start_time_ticks(pid: u32) -> Result<Option<u64>, ManagedExecError> {

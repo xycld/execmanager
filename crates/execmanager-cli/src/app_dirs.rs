@@ -37,11 +37,11 @@ impl AppDirs {
     pub fn from_home(home: &Path) -> Self {
         #[cfg(target_os = "linux")]
         {
-            return Self {
+            Self {
                 config_dir: home.join(".config").join(APP_DIR_NAME),
                 runtime_dir: home.join(".local").join("run").join(APP_DIR_NAME),
                 state_dir: home.join(".local").join("state").join(APP_DIR_NAME),
-            };
+            }
         }
 
         #[cfg(target_os = "macos")]
@@ -51,11 +51,11 @@ impl AppDirs {
                 .join("Application Support")
                 .join(APP_DIR_NAME);
 
-            return Self {
+            Self {
                 config_dir: app_support.clone(),
                 runtime_dir: app_support.join("runtime"),
                 state_dir: app_support.join("state"),
-            };
+            }
         }
 
         #[cfg(not(any(target_os = "linux", target_os = "macos")))]

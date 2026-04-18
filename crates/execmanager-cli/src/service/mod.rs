@@ -7,7 +7,7 @@ use std::{
     process::Command as ProcessCommand,
 };
 
-use crate::{app_dirs::AppDirs, commands::ServiceCommand, CliError};
+use crate::{CliError, app_dirs::AppDirs, commands::ServiceCommand};
 
 const SYSTEMD_UNIT_NAME: &str = "dev.execmanager.daemon.service";
 #[cfg(target_os = "macos")]
@@ -122,19 +122,17 @@ pub(crate) fn current_user_service_definition_path() -> Result<PathBuf, CliError
 pub(crate) fn service_definition_path_for_root(root: &Path) -> PathBuf {
     #[cfg(target_os = "linux")]
     {
-        return root
-            .join(".config")
+        root.join(".config")
             .join("systemd")
             .join("user")
-            .join(SYSTEMD_UNIT_NAME);
+            .join(SYSTEMD_UNIT_NAME)
     }
 
     #[cfg(target_os = "macos")]
     {
-        return root
-            .join("Library")
+        root.join("Library")
             .join("LaunchAgents")
-            .join(LAUNCH_AGENT_FILE_NAME);
+            .join(LAUNCH_AGENT_FILE_NAME)
     }
 
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
@@ -193,12 +191,12 @@ fn service_action(command: &ServiceCommand) -> &'static str {
 fn current_service_kind() -> ServiceKind {
     #[cfg(target_os = "linux")]
     {
-        return ServiceKind::SystemdUser;
+        ServiceKind::SystemdUser
     }
 
     #[cfg(target_os = "macos")]
     {
-        return ServiceKind::LaunchAgent;
+        ServiceKind::LaunchAgent
     }
 
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
