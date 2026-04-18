@@ -27,7 +27,7 @@ jobs:
       - name: Reject Rust lint suppressions
         shell: bash
         run: |
-          if git grep -nE '#!\[allow\(|#\[allow\(|#\[expect\(' -- '*.rs'; then
+          if git grep -nE '#!\[allow\(|#\[allow\(|#!\[expect\(|#\[expect\(' -- '*.rs'; then
             echo 'Rust lint suppressions are not allowed in CI.'
             exit 1
           fi
