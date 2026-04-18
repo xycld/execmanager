@@ -57,13 +57,6 @@ fn detect_context(
     service_definition_path: PathBuf,
     execmanager_path: PathBuf,
 ) -> Result<InitContext, CliError> {
-    if matches!(
-        adapter.detect(),
-        crate::adapters::AdapterDetection::NotDetected { .. }
-    ) {
-        return Err("Kimi adapter was not detected".into());
-    }
-
     let (service_kind, service_label) = detect_service_kind();
     let (service_previously_present, service_definition_backup_contents) =
         read_service_definition_snapshot(&service_definition_path);

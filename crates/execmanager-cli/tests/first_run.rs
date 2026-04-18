@@ -61,10 +61,13 @@ struct CurrentUserTestEnv {
 fn configure_current_user_test_env(
     root: &Path,
     auto_confirm: Option<impl AsRef<OsStr>>,
+    create_hooks_dir: bool,
 ) -> CurrentUserTestEnv {
     let home = root.join("home");
     let kimi_hooks_dir = home.join(".config").join("kimi").join("hooks");
-    std::fs::create_dir_all(&kimi_hooks_dir).expect("create kimi hooks dir");
+    if create_hooks_dir {
+        std::fs::create_dir_all(&kimi_hooks_dir).expect("create kimi hooks dir");
+    }
 
     let config_dir = root.join("current-user-config");
     let runtime_dir = root.join("current-user-runtime");
@@ -182,7 +185,7 @@ fn apply_init_plan_persists_metadata_from_reviewed_context_not_mutated_public_fi
 fn smart_entry_interactive_path_executes_install_flow_after_confirmation() {
     let _lock = env_lock();
     let temp = tempfile::tempdir().expect("tempdir");
-    let env = configure_current_user_test_env(temp.path(), Some("yes"));
+    let env = configure_current_user_test_env(temp.path(), Some("yes"), true);
     let output =
         execmanager_cli::run_for_test(temp.path(), true, ["execmanager"]).expect("run smart entry");
 
@@ -202,7 +205,7 @@ fn smart_entry_interactive_path_executes_install_flow_after_confirmation() {
 fn init_command_executes_install_flow_after_confirmation() {
     let _lock = env_lock();
     let temp = tempfile::tempdir().expect("tempdir");
-    let env = configure_current_user_test_env(temp.path(), Some("yes"));
+    let env = configure_current_user_test_env(temp.path(), Some("yes"), true);
 
     let output = execmanager_cli::run_for_test(temp.path(), true, ["execmanager", "init"])
         .expect("run init command");
@@ -218,7 +221,7 @@ fn init_command_executes_install_flow_after_confirmation() {
 fn smart_entry_prints_init_guidance_when_non_interactive_and_uninitialized() {
     let _lock = env_lock();
     let temp = tempfile::tempdir().expect("tempdir");
-    let _env = configure_current_user_test_env(temp.path(), Some("yes"));
+    let _env = configure_current_user_test_env(temp.path(), Some("yes"), true);
     let output = execmanager_cli::run_for_test(temp.path(), false, ["execmanager"])
         .expect("run smart entry");
 
@@ -232,7 +235,7 @@ fn smart_entry_prints_init_guidance_when_non_interactive_and_uninitialized() {
 fn init_command_requires_interactive_terminal() {
     let _lock = env_lock();
     let temp = tempfile::tempdir().expect("tempdir");
-    let _env = configure_current_user_test_env(temp.path(), Some("yes"));
+    let _env = configure_current_user_test_env(temp.path(), Some("yes"), true);
 
     let output = execmanager_cli::run_for_test(temp.path(), false, ["execmanager", "init"])
         .expect("run init command");
@@ -247,7 +250,7 @@ fn init_command_requires_interactive_terminal() {
 fn smart_entry_prints_operational_summary_when_initialized() {
     let _lock = env_lock();
     let temp = tempfile::tempdir().expect("tempdir");
-    let env = configure_current_user_test_env(temp.path(), Some("yes"));
+    let env = configure_current_user_test_env(temp.path(), Some("yes"), true);
     InitMetadata {
         initialized: true,
         selected_adapter: Some("kimi".to_string()),
@@ -270,7 +273,7 @@ fn smart_entry_prints_operational_summary_when_initialized() {
 fn init_command_uses_auto_confirm_env_to_reach_real_confirmation_path() {
     let _lock = env_lock();
     let temp = tempfile::tempdir().expect("tempdir");
-    let env = configure_current_user_test_env(temp.path(), Some("true"));
+    let env = configure_current_user_test_env(temp.path(), Some("true"), true);
 
     let output = execmanager_cli::run_for_test(temp.path(), true, ["execmanager", "init"])
         .expect("run init command");
@@ -283,7 +286,7 @@ fn init_command_uses_auto_confirm_env_to_reach_real_confirmation_path() {
 fn init_command_does_not_install_when_auto_confirm_env_is_falsey() {
     let _lock = env_lock();
     let temp = tempfile::tempdir().expect("tempdir");
-    let env = configure_current_user_test_env(temp.path(), Some("no"));
+    let env = configure_current_user_test_env(temp.path(), Some("no"), true);
 
     let output = execmanager_cli::run_for_test(temp.path(), true, ["execmanager", "init"])
         .expect("run init command");
@@ -293,6 +296,25 @@ fn init_command_does_not_install_when_auto_confirm_env_is_falsey() {
 
     let metadata = InitMetadata::load(&env.dirs).expect("load metadata");
     assert!(!metadata.initialized);
+}
+
+#[test]
+fn init_command_installs_even_when_kimi_hooks_dir_is_missing() {
+    let _lock = env_lock();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let env = configure_current_user_test_env(temp.path(), Some("yes"), false);
+
+    assert!(!env.hook_path.parent().expect("hook parent").exists());
+
+    let output = execmanager_cli::run_for_test(temp.path(), true, ["execmanager", "init"])
+        .expect("run init command");
+
+    assert!(output.contains("installation completed"));
+    assert!(env.hook_path.exists());
+
+    let metadata = InitMetadata::load(&env.dirs).expect("load metadata");
+    assert!(metadata.initialized);
+    assert_eq!(metadata.selected_adapter.as_deref(), Some("kimi"));
 }
 
 #[cfg(target_os = "linux")]
