@@ -14,6 +14,7 @@ pub mod test_support;
 pub mod uninstall;
 
 use std::{
+    fs,
     io::{self, Write},
     path::Path,
 };
@@ -22,6 +23,7 @@ use adapters::{Adapter, KimiAdapter};
 use app_dirs::AppDirs;
 use commands::{Command, HooksCommand, UninstallMode};
 use doctor::run_doctor;
+use execmanager_tui::terminal::run_dashboard;
 use init::{apply_init_plan, apply_init_plan_with_daemon_stage, build_current_user_init_plan, InitMode, InitPlan};
 use metadata::InitMetadata;
 use service::run_service_command_with_runner;
@@ -43,6 +45,17 @@ pub fn run_init(dirs: &AppDirs, interactive: bool) -> Result<String, CliError> {
 }
 
 pub async fn run_smart_entry(dirs: &AppDirs, interactive: bool) -> Result<String, CliError> {
+    run_smart_entry_with(dirs, interactive, run_initialized_smart_entry)
+}
+
+fn run_smart_entry_with<F>(
+    dirs: &AppDirs,
+    interactive: bool,
+    initialized_entry: F,
+) -> Result<String, CliError>
+where
+    F: FnOnce(&AppDirs, bool) -> Result<String, CliError>,
+{
     let metadata = InitMetadata::load(dirs)?;
     if !metadata.initialized && interactive {
         return run_init(dirs, true);
@@ -51,7 +64,26 @@ pub async fn run_smart_entry(dirs: &AppDirs, interactive: bool) -> Result<String
         return Ok(SMART_ENTRY_INIT_GUIDANCE.to_string());
     }
 
-    render_status(dirs)
+    initialized_entry(dirs, interactive)
+}
+
+fn run_initialized_smart_entry(dirs: &AppDirs, interactive: bool) -> Result<String, CliError> {
+    if !interactive {
+        return render_status(dirs);
+    }
+
+    let journal_path = ensure_journal_path(dirs)?;
+    run_dashboard(&journal_path)?;
+    Ok(String::new())
+}
+
+fn ensure_journal_path(dirs: &AppDirs) -> Result<std::path::PathBuf, CliError> {
+    fs::create_dir_all(&dirs.state_dir)?;
+    let journal_path = dirs.state_dir.join("events.journal");
+    if !journal_path.exists() {
+        fs::File::create(&journal_path)?;
+    }
+    Ok(journal_path)
 }
 
 pub async fn run_current_user_command(
@@ -208,6 +240,13 @@ where
     }
     if !metadata.initialized {
         return Ok(SMART_ENTRY_INIT_GUIDANCE.to_string());
+    }
+
+    if interactive {
+        let journal_path = ensure_journal_path(dirs)?;
+        let model = execmanager_tui::runtime::load_dashboard_model(&journal_path)?;
+        let app = execmanager_tui::app::DashboardApp::new(model);
+        return Ok(execmanager_tui::render_dashboard(&app, false));
     }
 
     render_status(dirs)

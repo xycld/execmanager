@@ -247,7 +247,34 @@ fn init_command_requires_interactive_terminal() {
 }
 
 #[test]
-fn smart_entry_prints_operational_summary_when_initialized() {
+fn smart_entry_launches_tui_when_initialized_and_interactive() {
+    let _lock = env_lock();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let env = configure_current_user_test_env(temp.path(), Some("yes"), true);
+    std::fs::create_dir_all(&env.dirs.state_dir).expect("create state dir");
+    std::fs::write(env.dirs.state_dir.join("events.journal"), b"").expect("seed empty journal");
+    InitMetadata {
+        initialized: true,
+        selected_adapter: Some("kimi".to_string()),
+        service_kind: Some("systemd --user".to_string()),
+        install_state: execmanager_cli::metadata::InstallState::Installed,
+        install_version: None,
+    }
+    .store(&env.dirs)
+    .expect("store metadata");
+
+    let output =
+        execmanager_cli::run_for_test(temp.path(), true, ["execmanager"]).expect("run smart entry");
+
+    assert!(output.contains("Instances"));
+    assert!(output.contains("Services"));
+    assert!(output.contains("History"));
+    assert!(output.contains("Ghosts/Reconcile"));
+    assert!(output.contains("Detail"));
+}
+
+#[test]
+fn smart_entry_prints_operational_summary_when_initialized_and_non_interactive() {
     let _lock = env_lock();
     let temp = tempfile::tempdir().expect("tempdir");
     let env = configure_current_user_test_env(temp.path(), Some("yes"), true);
@@ -261,8 +288,8 @@ fn smart_entry_prints_operational_summary_when_initialized() {
     .store(&env.dirs)
     .expect("store metadata");
 
-    let output =
-        execmanager_cli::run_for_test(temp.path(), true, ["execmanager"]).expect("run smart entry");
+    let output = execmanager_cli::run_for_test(temp.path(), false, ["execmanager"])
+        .expect("run smart entry");
 
     assert!(output.contains("initialized: yes"));
     assert!(output.contains("adapter: kimi"));

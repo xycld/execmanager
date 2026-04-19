@@ -12,6 +12,7 @@ path = "src/main.rs"
 execmanager-contracts = { path = "../execmanager-contracts" }
 execmanager-daemon = { path = "../execmanager-daemon" }
 execmanager-host-kimi = { path = "../execmanager-host-kimi" }
+execmanager-tui = { path = "../execmanager-tui" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.37", features = ["macros", "rt-multi-thread", "process", "fs", "io-util", "time"] }
