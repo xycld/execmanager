@@ -23,6 +23,7 @@ pub enum UninstallMode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     SmartEntry,
+    Help,
     Init,
     Status,
     Doctor,
@@ -80,6 +81,7 @@ impl Command {
 
         match tail {
             [] => Ok(Self::SmartEntry),
+            [flag] if flag == "-h" || flag == "--help" => Ok(Self::Help),
             [command] if command == "init" => Ok(Self::Init),
             [command] if command == "status" => Ok(Self::Status),
             [command] if command == "doctor" => Ok(Self::Doctor),
@@ -132,6 +134,15 @@ impl Command {
 #[cfg(test)]
 mod tests {
     use super::{Command, UninstallMode};
+
+    #[test]
+    fn parses_top_level_help_flags() {
+        assert_eq!(Command::parse_from(["execmanager", "-h"]), Command::Help);
+        assert_eq!(
+            Command::parse_from(["execmanager", "--help"]),
+            Command::Help
+        );
+    }
 
     #[test]
     fn parses_safe_uninstall_without_flag() {

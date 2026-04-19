@@ -32,6 +32,11 @@ pub type CliError = Box<dyn std::error::Error + Send + Sync>;
 
 const SMART_ENTRY_INIT_GUIDANCE: &str = "ExecManager is not initialized. Run `execmanager init`.";
 const NONINTERACTIVE_INIT_GUIDANCE: &str = "ExecManager init requires an interactive terminal. Re-run `execmanager init` from an interactive terminal to review and apply installation changes.";
+const HELP_TEXT: &str = "ExecManager\n\nUsage:\n  execmanager\n  execmanager init\n  execmanager status\n  execmanager doctor\n  execmanager uninstall [--restore]\n  execmanager service <start|stop|restart>\n  execmanager hooks <install|repair>\n\nOptions:\n  -h, --help  Show this help message";
+
+fn render_help() -> String {
+    HELP_TEXT.to_string()
+}
 
 pub fn run_init(dirs: &AppDirs, interactive: bool) -> Result<String, CliError> {
     run_init_with(dirs, interactive, confirm_install_apply, apply_init_plan)
@@ -58,6 +63,7 @@ pub async fn run_current_user_command(
             let dirs = AppDirs::for_current_user()?;
             run_smart_entry(&dirs, interactive).await
         }
+        Command::Help => Ok(render_help()),
         Command::Init => {
             let dirs = AppDirs::for_current_user()?;
             run_init(&dirs, interactive)
@@ -164,6 +170,7 @@ where
             let dirs = AppDirs::for_current_user()?;
             run_smart_entry_for_test(&dirs, interactive, &mut daemon_stage)
         }
+        Command::Help => Ok(render_help()),
         Command::Init => {
             let dirs = AppDirs::for_current_user()?;
             run_init_for_test(&dirs, interactive, &mut daemon_stage)
