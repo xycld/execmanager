@@ -104,63 +104,12 @@ fn env_path_override(name: &str) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        ffi::{OsStr, OsString},
-        path::PathBuf,
-        sync::{Mutex, MutexGuard, OnceLock},
-    };
+    use crate::test_support::env::{lock as env_lock, EnvVarGuard};
+    use std::path::PathBuf;
 
     use tempfile::TempDir;
 
     use super::AppDirs;
-
-    struct EnvVarGuard {
-        name: &'static str,
-        original: Option<OsString>,
-    }
-
-    impl EnvVarGuard {
-        fn set(name: &'static str, value: impl AsRef<OsStr>) -> Self {
-            let original = std::env::var_os(name);
-
-            unsafe {
-                std::env::set_var(name, value);
-            }
-
-            Self { name, original }
-        }
-
-        fn remove(name: &'static str) -> Self {
-            let original = std::env::var_os(name);
-
-            unsafe {
-                std::env::remove_var(name);
-            }
-
-            Self { name, original }
-        }
-    }
-
-    impl Drop for EnvVarGuard {
-        fn drop(&mut self) {
-            match &self.original {
-                Some(value) => unsafe {
-                    std::env::set_var(self.name, value);
-                },
-                None => unsafe {
-                    std::env::remove_var(self.name);
-                },
-            }
-        }
-    }
-
-    fn env_lock() -> MutexGuard<'static, ()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-
-        LOCK.get_or_init(|| Mutex::new(()))
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-    }
 
     struct CurrentUserEnv {
         _root: TempDir,

@@ -248,50 +248,9 @@ impl Adapter for KimiAdapter {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        ffi::OsString,
-        sync::{Mutex, MutexGuard, OnceLock},
-    };
+    use crate::test_support::env::{lock as env_lock, EnvVarGuard};
 
     use super::KimiAdapter;
-
-    struct EnvVarGuard {
-        name: &'static str,
-        original: Option<OsString>,
-    }
-
-    impl EnvVarGuard {
-        fn remove(name: &'static str) -> Self {
-            let original = std::env::var_os(name);
-
-            unsafe {
-                std::env::remove_var(name);
-            }
-
-            Self { name, original }
-        }
-    }
-
-    impl Drop for EnvVarGuard {
-        fn drop(&mut self) {
-            match &self.original {
-                Some(value) => unsafe {
-                    std::env::set_var(self.name, value);
-                },
-                None => unsafe {
-                    std::env::remove_var(self.name);
-                },
-            }
-        }
-    }
-
-    fn env_lock() -> MutexGuard<'static, ()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-
-        LOCK.get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("env lock")
-    }
 
     #[test]
     fn new_fails_closed_when_home_is_missing() {

@@ -2,7 +2,7 @@ use execmanager_cli::{
     adapters::{Adapter, KimiAdapter},
     app_dirs::AppDirs,
     recovery::{HookInstallMode, RecoveryMetadata},
-    uninstall::{run_restore_uninstall, run_uninstall},
+    uninstall::{run_restore_uninstall_with_service_runner, run_uninstall_with_service_runner},
 };
 use std::{
     ffi::{OsStr, OsString},
@@ -56,7 +56,7 @@ fn safe_uninstall_removes_only_managed_artifacts() {
     std::fs::write(dirs.config_dir.join("user-note.txt"), "keep me").expect("write note");
     std::fs::write(dirs.config_dir.join("execmanager.json"), "{}").expect("write metadata");
 
-    run_uninstall(&dirs).expect("safe uninstall");
+    run_uninstall_with_service_runner(&dirs, |_| Ok(())).expect("safe uninstall");
 
     assert!(dirs.config_dir.join("user-note.txt").exists());
 }
@@ -83,7 +83,7 @@ fn restore_uninstall_restores_original_hook_contents_when_backup_exists() {
     .store(&dirs)
     .expect("store recovery metadata");
 
-    run_restore_uninstall(&dirs).expect("restore uninstall");
+    run_restore_uninstall_with_service_runner(&dirs, |_| Ok(())).expect("restore uninstall");
 
     let restored = std::fs::read_to_string(&hook_path).expect("read restored hook");
     assert_eq!(restored, "#!/bin/sh\n# original hook\n");
@@ -111,7 +111,8 @@ fn restore_uninstall_falls_back_to_safe_removal_when_hook_restore_is_impossible(
     .store(&dirs)
     .expect("store recovery metadata");
 
-    let output = run_restore_uninstall(&dirs).expect("restore uninstall");
+    let output =
+        run_restore_uninstall_with_service_runner(&dirs, |_| Ok(())).expect("restore uninstall");
 
     assert!(!hook_path.exists());
     assert!(output.contains("safe removal"));
@@ -159,7 +160,7 @@ fn restore_uninstall_uses_adapter_managed_hook_path_under_config_override() {
     .store(&dirs)
     .expect("store recovery metadata");
 
-    run_restore_uninstall(&dirs).expect("restore uninstall");
+    run_restore_uninstall_with_service_runner(&dirs, |_| Ok(())).expect("restore uninstall");
 
     assert_eq!(
         std::fs::read_to_string(&actual_hook_path).expect("read actual restored hook"),
@@ -199,7 +200,8 @@ fn restore_uninstall_accepts_legitimate_current_user_service_path_under_config_o
     .store(&dirs)
     .expect("store recovery metadata");
 
-    let output = run_restore_uninstall(&dirs).expect("restore uninstall");
+    let output =
+        run_restore_uninstall_with_service_runner(&dirs, |_| Ok(())).expect("restore uninstall");
 
     assert_eq!(
         std::fs::read_to_string(&service_path).expect("read restored service"),
@@ -232,7 +234,8 @@ fn restore_uninstall_does_not_trust_mismatched_service_path_from_metadata() {
     .store(&dirs)
     .expect("store recovery metadata");
 
-    let output = run_restore_uninstall(&dirs).expect("restore uninstall");
+    let output =
+        run_restore_uninstall_with_service_runner(&dirs, |_| Ok(())).expect("restore uninstall");
 
     assert!(!expected_service_path.exists());
     assert_eq!(
@@ -240,6 +243,47 @@ fn restore_uninstall_does_not_trust_mismatched_service_path_from_metadata() {
         "user service"
     );
     assert!(output.contains("did not match the expected managed service path"));
+}
+
+#[test]
+fn restore_uninstall_stops_and_reloads_managed_service() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let root = temp.path();
+    let dirs = AppDirs::for_test(root);
+
+    std::fs::create_dir_all(&dirs.config_dir).expect("config dir");
+    std::fs::write(dirs.metadata_file(), "{}").expect("metadata");
+    RecoveryMetadata {
+        selected_adapter: "kimi".to_string(),
+        hook_install_mode: HookInstallMode::NewFile,
+        hook_backup_contents: None,
+        service_definition_path: managed_service_definition_path(root),
+        service_previously_present: false,
+        service_definition_backup_contents: None,
+        fully_restorable: true,
+    }
+    .store(&dirs)
+    .expect("recovery metadata");
+
+    let service_commands = std::cell::RefCell::new(Vec::<String>::new());
+    run_restore_uninstall_with_service_runner(&dirs, |command| {
+        service_commands.borrow_mut().push(format!(
+            "{} {}",
+            command.program,
+            command.args.join(" ")
+        ));
+        Ok(())
+    })
+    .expect("restore uninstall");
+
+    #[cfg(target_os = "linux")]
+    assert_eq!(
+        service_commands.borrow().as_slice(),
+        &[
+            "systemctl --user stop dev.execmanager.daemon.service".to_string(),
+            "systemctl --user daemon-reload".to_string(),
+        ]
+    );
 }
 
 #[cfg(target_os = "linux")]

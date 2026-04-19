@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use execmanager_cli::{
     app_dirs::AppDirs,
     init::{apply_init_plan_with_daemon_stage, build_init_plan, InitMode},
-    uninstall::run_uninstall,
+    uninstall::run_uninstall_with_service_runner,
 };
 
 #[test]
@@ -26,7 +26,17 @@ fn uninstall_removes_managed_artifacts_but_not_unrelated_user_files() {
     assert!(hook_path.exists());
     assert!(service_definition_path.exists());
 
-    run_uninstall(&dirs).expect("uninstall");
+    let service_commands = std::cell::RefCell::new(Vec::<String>::new());
+
+    run_uninstall_with_service_runner(&dirs, |command| {
+        service_commands.borrow_mut().push(format!(
+            "{} {}",
+            command.program,
+            command.args.join(" ")
+        ));
+        Ok(())
+    })
+    .expect("uninstall");
 
     assert!(dirs.config_dir.join("user-note.txt").exists());
     assert!(!dirs.metadata_file().exists());
@@ -34,6 +44,15 @@ fn uninstall_removes_managed_artifacts_but_not_unrelated_user_files() {
     assert!(!service_definition_path.exists());
     assert!(!dirs.runtime_dir.join("execmanager.sock").exists());
     assert!(!dirs.state_dir.join("events.journal").exists());
+
+    #[cfg(target_os = "linux")]
+    assert_eq!(
+        service_commands.borrow().as_slice(),
+        &[
+            "systemctl --user stop dev.execmanager.daemon.service".to_string(),
+            "systemctl --user daemon-reload".to_string(),
+        ]
+    );
 }
 
 #[cfg(target_os = "linux")]

@@ -1,10 +1,6 @@
 # ExecManager
 
-[中文说明 / 中文版 README](README.zh-CN.md)
-
-ExecManager is a local integration layer for Kimi Code.
-
-It is designed to give you one installer-grade entrypoint for getting the tool onto your machine and then letting `execmanager` handle the local setup flow.
+Hook into your Code Agent's exec tool to intercept, record, snapshot, and manage command execution.
 
 ## Install
 
@@ -20,3 +16,7 @@ Run the CLI help for commands and options:
 ```bash
 execmanager -h
 ```
+
+---
+
+[中文](README.zh-CN.md)

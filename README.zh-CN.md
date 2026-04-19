@@ -1,10 +1,6 @@
 # ExecManager
 
-[English README](README.md)
-
-ExecManager 是一个面向 Kimi Code 的本地集成层。
-
-它提供一个 installer-grade 入口，用来先把二进制安装到本机，再由 `execmanager` 自己完成本地环境配置。
+对 Code Agent 的 Exec Tool 进行 Hook，接管命令执行，记录日志，生成快照，统一管理。
 
 ## 安装
 
@@ -13,10 +9,14 @@ curl -fsSL https://raw.githubusercontent.com/xycld/execmanager/main/install.sh |
 execmanager
 ```
 
-## 使用
+## 用法
 
-命令和参数请直接查看：
+查看 CLI 帮助以获取命令和选项：
 
 ```bash
 execmanager -h
 ```
+
+---
+
+[English](README.md)

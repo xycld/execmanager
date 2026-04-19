@@ -9,6 +9,8 @@ mod persist;
 pub mod recovery;
 pub mod service;
 pub mod status;
+#[cfg(test)]
+pub mod test_support;
 pub mod uninstall;
 
 use std::{
@@ -110,6 +112,23 @@ where
     S: Into<String>,
     F: FnMut(&service::ServiceManagerCommand) -> Result<(), CliError>,
 {
+    run_for_test_with_hooks_and_service_runner(root, interactive, args, |_| Ok(()), runner)
+}
+
+pub fn run_for_test_with_hooks_and_service_runner<P, I, S, H, F>(
+    root: P,
+    interactive: bool,
+    args: I,
+    daemon_stage: H,
+    runner: F,
+) -> Result<String, CliError>
+where
+    P: AsRef<Path>,
+    I: IntoIterator<Item = S>,
+    S: Into<String>,
+    H: FnMut(&AppDirs) -> Result<(), CliError>,
+    F: FnMut(&service::ServiceManagerCommand) -> Result<(), CliError>,
+{
     let command = Command::from_env(args)?;
     let root = root.as_ref();
     let dirs = AppDirs::for_test(root);
@@ -117,27 +136,37 @@ where
         .enable_all()
         .build()?;
 
-    runtime.block_on(run_test_command(root, &dirs, command, interactive, runner))
+    runtime.block_on(run_test_command(
+        root,
+        &dirs,
+        command,
+        interactive,
+        daemon_stage,
+        runner,
+    ))
 }
 
-async fn run_test_command<F>(
+async fn run_test_command<H, F>(
     root: &Path,
     dirs: &AppDirs,
     command: Command,
     interactive: bool,
+    daemon_stage: H,
     runner: F,
 ) -> Result<String, CliError>
 where
+    H: FnMut(&AppDirs) -> Result<(), CliError>,
     F: FnMut(&service::ServiceManagerCommand) -> Result<(), CliError>,
 {
+    let mut daemon_stage = daemon_stage;
     match command {
         Command::SmartEntry => {
             let dirs = AppDirs::for_current_user()?;
-            run_smart_entry_for_test(&dirs, interactive)
+            run_smart_entry_for_test(&dirs, interactive, &mut daemon_stage)
         }
         Command::Init => {
             let dirs = AppDirs::for_current_user()?;
-            run_init_for_test(&dirs, interactive)
+            run_init_for_test(&dirs, interactive, &mut daemon_stage)
         }
         Command::Status => render_status(dirs),
         Command::Doctor => run_doctor(dirs),
@@ -158,10 +187,17 @@ where
     }
 }
 
-fn run_smart_entry_for_test(dirs: &AppDirs, interactive: bool) -> Result<String, CliError> {
+fn run_smart_entry_for_test<H>(
+    dirs: &AppDirs,
+    interactive: bool,
+    daemon_stage: &mut H,
+) -> Result<String, CliError>
+where
+    H: FnMut(&AppDirs) -> Result<(), CliError>,
+{
     let metadata = InitMetadata::load(dirs)?;
     if !metadata.initialized && interactive {
-        return run_init_for_test(dirs, true);
+        return run_init_for_test(dirs, true, daemon_stage);
     }
     if !metadata.initialized {
         return Ok(SMART_ENTRY_INIT_GUIDANCE.to_string());
@@ -170,9 +206,16 @@ fn run_smart_entry_for_test(dirs: &AppDirs, interactive: bool) -> Result<String,
     render_status(dirs)
 }
 
-fn run_init_for_test(dirs: &AppDirs, interactive: bool) -> Result<String, CliError> {
+fn run_init_for_test<H>(
+    dirs: &AppDirs,
+    interactive: bool,
+    daemon_stage: &mut H,
+) -> Result<String, CliError>
+where
+    H: FnMut(&AppDirs) -> Result<(), CliError>,
+{
     run_init_with(dirs, interactive, confirm_install_apply, |plan| {
-        apply_init_plan_with_daemon_stage(plan, |_| Ok(()))
+        apply_init_plan_with_daemon_stage(plan, daemon_stage)
     })
 }
 

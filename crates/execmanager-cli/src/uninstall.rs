@@ -3,14 +3,26 @@ use std::fs;
 use crate::{
     adapters::{Adapter, KimiAdapter},
     app_dirs::AppDirs,
+    commands::ServiceCommand,
     recovery::{HookInstallMode, RecoveryMetadata},
-    service::{current_user_service_definition_path, service_definition_path_for_root},
+    service::{
+        current_user_service_definition_path, run_service_command_with_runner,
+        service_definition_path_for_root, ServiceManagerCommand,
+    },
     CliError,
 };
 
 const RECOVERY_METADATA_FILE_NAME: &str = "recovery.json";
 
 pub fn run_uninstall(dirs: &AppDirs) -> Result<(), CliError> {
+    run_uninstall_with_service_runner(dirs, service_runner)
+}
+
+pub fn run_uninstall_with_service_runner<F>(dirs: &AppDirs, runner: F) -> Result<(), CliError>
+where
+    F: FnMut(&ServiceManagerCommand) -> Result<(), CliError>,
+{
+    stop_and_unregister_service(dirs, runner)?;
     safe_uninstall_hook(dirs)?;
     remove_managed_file(managed_service_definition_path(dirs)?)?;
     remove_common_uninstall_artifacts(dirs)?;
@@ -18,6 +30,16 @@ pub fn run_uninstall(dirs: &AppDirs) -> Result<(), CliError> {
 }
 
 pub fn run_restore_uninstall(dirs: &AppDirs) -> Result<String, CliError> {
+    run_restore_uninstall_with_service_runner(dirs, service_runner)
+}
+
+pub fn run_restore_uninstall_with_service_runner<F>(
+    dirs: &AppDirs,
+    runner: F,
+) -> Result<String, CliError>
+where
+    F: FnMut(&ServiceManagerCommand) -> Result<(), CliError>,
+{
     let recovery = match RecoveryMetadata::load(dirs) {
         Ok(recovery) => recovery,
         Err(_) => {
@@ -31,6 +53,7 @@ pub fn run_restore_uninstall(dirs: &AppDirs) -> Result<String, CliError> {
 
     let mut limitations = Vec::new();
 
+    stop_and_unregister_service(dirs, runner)?;
     restore_or_remove_hook(dirs, &recovery, &mut limitations)?;
     restore_or_remove_service(dirs, &recovery, &mut limitations)?;
     remove_common_uninstall_artifacts(dirs)?;
@@ -117,6 +140,40 @@ fn restore_or_remove_service(
 fn safe_uninstall_hook(dirs: &AppDirs) -> Result<(), CliError> {
     kimi_adapter_for(dirs)?.uninstall_managed_hook()?;
     Ok(())
+}
+
+fn stop_and_unregister_service<F>(dirs: &AppDirs, mut runner: F) -> Result<(), CliError>
+where
+    F: FnMut(&ServiceManagerCommand) -> Result<(), CliError>,
+{
+    run_service_command_with_runner(dirs, ServiceCommand::Stop, &mut runner).map(|_| ())?;
+
+    #[cfg(target_os = "linux")]
+    {
+        runner(&ServiceManagerCommand {
+            program: "systemctl".to_string(),
+            args: vec!["--user".to_string(), "daemon-reload".to_string()],
+        })?;
+    }
+
+    Ok(())
+}
+
+fn service_runner(command: &ServiceManagerCommand) -> Result<(), CliError> {
+    let status = std::process::Command::new(&command.program)
+        .args(&command.args)
+        .status()?;
+
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "service manager command failed: {} {}",
+            command.program,
+            command.args.join(" ")
+        )
+        .into())
+    }
 }
 
 fn kimi_adapter_for(dirs: &AppDirs) -> Result<KimiAdapter, CliError> {

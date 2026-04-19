@@ -317,6 +317,32 @@ fn init_command_installs_even_when_kimi_hooks_dir_is_missing() {
     assert_eq!(metadata.selected_adapter.as_deref(), Some("kimi"));
 }
 
+#[test]
+fn init_command_reports_failed_partial_when_daemon_readiness_fails() {
+    let _lock = env_lock();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let env = configure_current_user_test_env(temp.path(), Some("yes"), false);
+
+    let output = execmanager_cli::run_for_test_with_hooks_and_service_runner(
+        temp.path(),
+        true,
+        ["execmanager", "init"],
+        |_| Err("daemon socket is still missing".into()),
+        |_| Ok(()),
+    )
+    .expect("run init command");
+
+    assert!(output.contains("installation requires attention"));
+    assert!(output.contains("recoverable failure"));
+
+    let metadata = InitMetadata::load(&env.dirs).expect("load metadata");
+    assert!(!metadata.initialized);
+    assert_eq!(
+        metadata.install_state,
+        execmanager_cli::metadata::InstallState::FailedPartial
+    );
+}
+
 #[cfg(target_os = "linux")]
 #[test]
 fn derives_stable_user_categories_from_home_on_linux() {
