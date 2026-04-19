@@ -13,7 +13,12 @@
 !/README.zh-CN.md
 !/install.sh
 !/tests/
-!/tests/**
+/tests/*
+!/tests/install-script-smoke.sh
+!/tests/*/
+# Explicit second-level test directories should be whitelisted here when tracked.
+# !/tests/<dir>/
+# !/tests/<dir>/**
 
 # Tracked support/config directories.
 !/.cargo/
