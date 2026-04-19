@@ -65,26 +65,20 @@ async fn supported_exec_populates_source_and_working_dir() {
     .expect("supported shell ingress should be managed");
 
     let (_exec_id, env_snapshot) = loop {
-        match execmanager_daemon::RuntimeProjection::replay_from_path(&journal_path) {
-            Ok(projection) => {
-                let exec_id = projection
-                    .history()
-                    .ok()
-                    .and_then(|history| {
-                        history.into_iter().find_map(|record| match record.event {
-                            execmanager_daemon::JournalEvent::LaunchRequested { exec_id, .. } => {
-                                Some(exec_id)
-                            }
-                            _ => None,
-                        })
-                    });
-                if let Some(exec_id) = exec_id {
-                    if let Some(env_snapshot) = projection.env_snapshot(exec_id.as_str()) {
-                        break (exec_id, env_snapshot.clone());
+        if let Ok(projection) = execmanager_daemon::RuntimeProjection::replay_from_path(&journal_path) {
+            let exec_id = projection.history().ok().and_then(|history| {
+                history.into_iter().find_map(|record| match record.event {
+                    execmanager_daemon::JournalEvent::LaunchRequested { exec_id, .. } => {
+                        Some(exec_id)
                     }
+                    _ => None,
+                })
+            });
+            if let Some(exec_id) = exec_id {
+                if let Some(env_snapshot) = projection.env_snapshot(exec_id.as_str()) {
+                    break (exec_id, env_snapshot.clone());
                 }
             }
-            Err(_) => {}
         }
         tokio::time::sleep(std::time::Duration::from_millis(25)).await;
     };
