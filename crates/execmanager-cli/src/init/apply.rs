@@ -76,11 +76,28 @@ fn write_install_metadata(
         selected_adapter: Some(plan.context.adapter_key.clone()),
         service_kind: Some(plan.context.service_label.clone()),
         install_state,
-        install_version: Some(env!("CARGO_PKG_VERSION").to_string()),
+        install_version: Some(install_version_for(&plan.context.execmanager_path)),
     }
     .store(&plan.context.dirs)?;
 
     Ok(())
+}
+
+fn install_version_for(execmanager_path: &std::path::Path) -> String {
+    let base_version = env!("CARGO_PKG_VERSION");
+    let install_channel_marker = execmanager_path
+        .parent()
+        .map(|parent| parent.join(".execmanager-install-channel"));
+
+    match install_channel_marker
+        .as_ref()
+        .and_then(|path| fs::read_to_string(path).ok())
+        .map(|contents| contents.trim().to_string())
+        .as_deref()
+    {
+        Some("snapshot") => format!("{base_version}-snapshot"),
+        _ => base_version.to_string(),
+    }
 }
 
 fn register_service_definition(context: &super::InitContext) -> Result<(), CliError> {

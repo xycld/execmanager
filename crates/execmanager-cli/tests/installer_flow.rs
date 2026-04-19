@@ -227,3 +227,20 @@ fn failed_daemon_readiness_keeps_install_state_failed_partial() {
     let recovery = RecoveryMetadata::load(&dirs).expect("load recovery metadata");
     assert_eq!(recovery.selected_adapter, "kimi");
 }
+
+#[test]
+fn snapshot_install_channel_marks_install_version() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let dirs = AppDirs::for_test(temp.path());
+    std::fs::write(
+        temp.path().join(".execmanager-install-channel"),
+        "snapshot\n",
+    )
+    .expect("write install channel marker");
+
+    let plan = build_init_plan(InitMode::InteractivePreview, temp.path()).expect("build plan");
+    apply_init_plan_with_daemon_stage(&plan, |_| Ok(())).expect("apply plan");
+
+    let metadata = InitMetadata::load(&dirs).expect("load metadata");
+    assert_eq!(metadata.install_version.as_deref(), Some("0.1.0-snapshot"));
+}

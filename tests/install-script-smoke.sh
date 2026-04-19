@@ -63,6 +63,7 @@ write_release_checksum "$temp_dir/execmanager-linux-x86_64"
 
 install_output="$(cd "$repo_root" && PATH='/usr/bin' INSTALL_OS=linux INSTALL_ARCH=x86_64 INSTALL_DIR="$temp_dir/bin" INSTALL_BASE_URL="file://$temp_dir" bash ./install.sh)"
 test -x "$temp_dir/bin/execmanager"
+test ! -e "$temp_dir/bin/.execmanager-install-channel"
 printf '%s\n' "$install_output" | grep -Fx "installed execmanager to $temp_dir/bin/execmanager"
 printf '%s\n' "$install_output" | grep -Fx "Add $temp_dir/bin to your PATH, then run:"
 printf '%s\n' "$install_output" | grep -Fx '  execmanager'
@@ -96,6 +97,8 @@ write_release_checksum "$temp_dir/execmanager-linux-x86_64-snapshot"
 
 snapshot_install_output="$(cd "$repo_root" && PATH='/usr/bin' INSTALL_OS=linux INSTALL_ARCH=x86_64 INSTALL_DIR="$temp_dir/snapshot-bin" INSTALL_SNAPSHOT_BASE_URL="file://$temp_dir" bash ./install.sh --snapshot)"
 test -x "$temp_dir/snapshot-bin/execmanager"
+test -f "$temp_dir/snapshot-bin/.execmanager-install-channel"
+grep -Fx 'snapshot' "$temp_dir/snapshot-bin/.execmanager-install-channel"
 printf '%s\n' "$snapshot_install_output" | grep -Fx "installed execmanager to $temp_dir/snapshot-bin/execmanager"
 printf '%s\n' "$snapshot_install_output" | grep -Fx "Add $temp_dir/snapshot-bin to your PATH, then run:"
 printf '%s\n' "$snapshot_install_output" | grep -Fx '  execmanager'

@@ -103,6 +103,11 @@ resolve_install_dir() {
   printf '%s/.local/bin\n' "$HOME"
 }
 
+install_channel_marker_path() {
+  local install_dir="$1"
+  printf '%s/.execmanager-install-channel\n' "$install_dir"
+}
+
 download_asset() {
   local url="$1"
   local destination="$2"
@@ -205,12 +210,14 @@ main() {
   local checksum_url
   local checksum_path
   local asset_label
+  local install_channel_marker
 
   install_mode="$(parse_install_mode "$@")"
   os="$(detect_os)"
   arch="$(detect_arch)"
   install_dir="$(resolve_install_dir)"
   target_path="${install_dir}/execmanager"
+  install_channel_marker="$(install_channel_marker_path "$install_dir")"
 
   case "$install_mode" in
     release)
@@ -264,6 +271,16 @@ main() {
   esac
 
   mv -f "$temp_path" "$target_path"
+
+  case "$install_mode" in
+    release)
+      rm -f "$install_channel_marker"
+      ;;
+    snapshot)
+      printf 'snapshot\n' > "$install_channel_marker"
+      ;;
+  esac
+
   rm -rf "$temp_dir"
   trap - EXIT INT TERM HUP
 
