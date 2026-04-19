@@ -9,6 +9,14 @@ fail() {
   exit 1
 }
 
+cleanup_install_temp_dir() {
+  local temp_dir_path="${1:-}"
+
+  if [ -n "$temp_dir_path" ]; then
+    rm -rf "$temp_dir_path"
+  fi
+}
+
 parse_install_mode() {
   if [ "$#" -eq 0 ]; then
     printf 'release\n'
@@ -114,117 +122,57 @@ require_python3() {
   fi
 }
 
-resolve_snapshot_download_url() {
-  local artifact_name="$1"
-  local api_base
-  local runs_url
-  local artifacts_url
-  local work_dir
-  local runs_json
-  local artifacts_json
-  local run_id
-  local download_url
-
-  require_python3
-
-  api_base="${INSTALL_GITHUB_API_BASE_URL:-https://api.github.com/repos/${repo_owner}/${repo_name}}"
-  runs_url="${INSTALL_SNAPSHOT_RUNS_URL:-${api_base}/actions/workflows/ci.yml/runs?branch=main&status=success&per_page=1}"
-
-  work_dir="$(mktemp -d "${TMPDIR:-/tmp}/execmanager-snapshot-api.XXXXXX")"
-  runs_json="${work_dir}/runs.json"
-  artifacts_json="${work_dir}/artifacts.json"
-
-  download_asset "$runs_url" "$runs_json"
-
-  if ! run_id="$(python3 - "$runs_json" <<'PY'
-import json
-import sys
-
-with open(sys.argv[1], encoding='utf-8') as handle:
-    payload = json.load(handle)
-
-workflow_runs = payload.get('workflow_runs') or []
-if not workflow_runs:
-    sys.exit(1)
-
-run_id = workflow_runs[0].get('id')
-if run_id is None:
-    sys.exit(1)
-
-print(run_id)
-PY
-  )" || [ -z "$run_id" ]; then
-    rm -rf "$work_dir"
-    fail 'failed to resolve latest successful snapshot run'
+require_sha256_tool() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    return
   fi
 
-  artifacts_url="${INSTALL_SNAPSHOT_ARTIFACTS_URL:-${api_base}/actions/runs/${run_id}/artifacts?per_page=100}"
-  download_asset "$artifacts_url" "$artifacts_json"
-
-  if ! download_url="$(python3 - "$artifacts_json" "$artifact_name" <<'PY'
-import json
-import sys
-
-with open(sys.argv[1], encoding='utf-8') as handle:
-    payload = json.load(handle)
-
-target_name = sys.argv[2]
-for artifact in payload.get('artifacts') or []:
-    if artifact.get('name') == target_name and not artifact.get('expired', False):
-        archive_download_url = artifact.get('archive_download_url')
-        if archive_download_url:
-            print(archive_download_url)
-            sys.exit(0)
-
-sys.exit(1)
-PY
-  )" || [ -z "$download_url" ]; then
-    rm -rf "$work_dir"
-    fail "failed to resolve snapshot artifact download URL: ${artifact_name}"
+  if command -v shasum >/dev/null 2>&1; then
+    return
   fi
 
-  rm -rf "$work_dir"
-  printf '%s\n' "$download_url"
+  fail 'sha256sum or shasum is required for release installs'
 }
 
-extract_snapshot_binary() {
-  local archive_path="$1"
-  local member_name="$2"
-  local destination="$3"
-  local status
+compute_sha256() {
+  local path="$1"
 
-  require_python3
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$path" | cut -d ' ' -f 1
+    return
+  fi
 
-  set +e
-  python3 - "$archive_path" "$member_name" "$destination" <<'PY'
-import pathlib
-import sys
-import zipfile
+  shasum -a 256 "$path" | cut -d ' ' -f 1
+}
 
-archive_path = pathlib.Path(sys.argv[1])
-member_name = sys.argv[2]
-destination = pathlib.Path(sys.argv[3])
+verify_release_checksum() {
+  local artifact_path="$1"
+  local checksum_path="$2"
+  local artifact_name="$3"
+  local expected_checksum
+  local actual_checksum
+  local checksum_entry_name
 
-with zipfile.ZipFile(archive_path) as archive:
-    try:
-        info = archive.getinfo(member_name)
-    except KeyError:
-        sys.exit(2)
+  require_sha256_tool
 
-    member_path = pathlib.PurePosixPath(info.filename)
-    if member_path.is_absolute() or '..' in member_path.parts or member_path.name != member_name:
-        sys.exit(3)
+  while IFS=' ' read -r expected_checksum checksum_entry_name _; do
+    [ -n "$expected_checksum" ] || continue
+    checksum_entry_name="${checksum_entry_name#\*}"
 
-    destination.write_bytes(archive.read(info))
-PY
-  status="$?"
-  set -e
+    if [ "$checksum_entry_name" = "$artifact_name" ]; then
+      break
+    fi
 
-  case "$status" in
-    0) ;;
-    2) fail "snapshot archive does not contain expected artifact: ${member_name}" ;;
-    *) fail 'failed to extract snapshot artifact archive' ;;
-  esac
+    expected_checksum=""
+  done < "$checksum_path"
+
+  [ -n "$expected_checksum" ] || fail 'failed to parse release checksum file'
+
+  actual_checksum="$(compute_sha256 "$artifact_path")"
+
+  if [ "$expected_checksum" != "$actual_checksum" ]; then
+    fail 'downloaded release checksum verification failed'
+  fi
 }
 
 path_contains_dir() {
@@ -254,6 +202,8 @@ main() {
   local target_path
   local temp_dir
   local temp_path
+  local checksum_url
+  local checksum_path
   local asset_label
 
   install_mode="$(parse_install_mode "$@")"
@@ -266,11 +216,13 @@ main() {
     release)
       artifact_name="$(resolve_release_artifact_name "$os" "$arch")"
       download_url="${INSTALL_BASE_URL:-https://github.com/${repo_owner}/${repo_name}/releases/latest/download}/${artifact_name}"
+      checksum_url="${download_url}.sha256"
       asset_label='release asset'
       ;;
     snapshot)
       artifact_name="$(resolve_snapshot_artifact_name "$os" "$arch")"
-      download_url="$(resolve_snapshot_download_url "$artifact_name")"
+      download_url="${INSTALL_SNAPSHOT_BASE_URL:-https://github.com/${repo_owner}/${repo_name}/releases/download/snapshot}/${artifact_name}"
+      checksum_url="${download_url}.sha256"
       asset_label='snapshot asset'
       ;;
     *)
@@ -288,22 +240,30 @@ main() {
   mkdir -p "$install_dir"
 
   temp_dir="$(mktemp -d "${install_dir}/execmanager.tmp.XXXXXX")"
-  trap 'rm -rf "$temp_dir"' EXIT INT TERM HUP
+  trap 'cleanup_install_temp_dir "${temp_dir:-}"' EXIT INT TERM HUP
 
   case "$install_mode" in
     release)
       temp_path="${temp_dir}/execmanager"
+      checksum_path="${temp_dir}/execmanager.sha256"
       download_asset "$download_url" "$temp_path"
+      [ -s "$temp_path" ] || fail 'downloaded release asset is empty'
+      download_asset "$checksum_url" "$checksum_path"
+      verify_release_checksum "$temp_path" "$checksum_path" "$artifact_name"
+      chmod +x "$temp_path"
       ;;
     snapshot)
       temp_path="${temp_dir}/execmanager"
-      download_asset "$download_url" "${temp_dir}/artifact.zip"
-      extract_snapshot_binary "${temp_dir}/artifact.zip" "$artifact_name" "$temp_path"
+      checksum_path="${temp_dir}/execmanager.sha256"
+      download_asset "$download_url" "$temp_path"
+      [ -s "$temp_path" ] || fail 'downloaded snapshot asset is empty'
+      download_asset "$checksum_url" "$checksum_path"
+      verify_release_checksum "$temp_path" "$checksum_path" "$artifact_name"
+      chmod +x "$temp_path"
       ;;
   esac
 
   mv -f "$temp_path" "$target_path"
-  chmod +x "$target_path"
   rm -rf "$temp_dir"
   trap - EXIT INT TERM HUP
 

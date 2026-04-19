@@ -3,42 +3,18 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 
-create_snapshot_fixture() {
-  local fixture_dir="$1"
+write_release_checksum() {
+  local artifact_path="$1"
 
-  python3 - "$fixture_dir" <<'PY'
-import json
+  python3 - "$artifact_path" <<'PY'
+import hashlib
 import pathlib
 import sys
-import zipfile
 
-fixture_dir = pathlib.Path(sys.argv[1])
-archive_path = fixture_dir / "execmanager-linux-x86_64-snapshot.zip"
-binary_name = "execmanager-linux-x86_64-snapshot"
-
-with zipfile.ZipFile(archive_path, "w") as archive:
-    archive.writestr(binary_name, "#!/usr/bin/env bash\necho execmanager-snapshot\n")
-
-(fixture_dir / "runs.json").write_text(json.dumps({
-    "workflow_runs": [
-        {
-            "id": 4242,
-            "head_branch": "main",
-            "status": "completed",
-            "conclusion": "success"
-        }
-    ]
-}), encoding="utf-8")
-
-(fixture_dir / "artifacts.json").write_text(json.dumps({
-    "artifacts": [
-        {
-            "name": binary_name,
-            "expired": False,
-            "archive_download_url": archive_path.as_uri()
-        }
-    ]
-}), encoding="utf-8")
+artifact_path = pathlib.Path(sys.argv[1])
+checksum_path = artifact_path.with_name(f"{artifact_path.name}.sha256")
+digest = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+checksum_path.write_text(f"{digest}  {artifact_path.name}\n", encoding="utf-8")
 PY
 }
 
@@ -83,6 +59,7 @@ trap 'rm -rf "$temp_dir"' EXIT
 
 printf '#!/usr/bin/env bash\necho execmanager\n' > "$temp_dir/execmanager-linux-x86_64"
 chmod +x "$temp_dir/execmanager-linux-x86_64"
+write_release_checksum "$temp_dir/execmanager-linux-x86_64"
 
 install_output="$(cd "$repo_root" && PATH='/usr/bin' INSTALL_OS=linux INSTALL_ARCH=x86_64 INSTALL_DIR="$temp_dir/bin" INSTALL_BASE_URL="file://$temp_dir" bash ./install.sh)"
 test -x "$temp_dir/bin/execmanager"
@@ -92,13 +69,32 @@ printf '%s\n' "$install_output" | grep -Fx '  execmanager'
 
 "$temp_dir/bin/execmanager" | grep -Fx 'execmanager'
 
-create_snapshot_fixture "$temp_dir"
+printf '#!/usr/bin/env bash\necho old-execmanager\n' > "$temp_dir/existing-execmanager"
+chmod +x "$temp_dir/existing-execmanager"
+mkdir -p "$temp_dir/bad-release"
+mkdir -p "$temp_dir/protected-bin"
+cp "$temp_dir/existing-execmanager" "$temp_dir/protected-bin/execmanager"
 
-snapshot_output="$(cd "$repo_root" && INSTALL_OS=linux INSTALL_ARCH=x86_64 DRY_RUN=1 INSTALL_SNAPSHOT_RUNS_URL="file://$temp_dir/runs.json" INSTALL_SNAPSHOT_ARTIFACTS_URL="file://$temp_dir/artifacts.json" bash ./install.sh --snapshot)"
+printf '#!/usr/bin/env bash\necho broken-execmanager\n' > "$temp_dir/bad-release/execmanager-linux-x86_64"
+chmod +x "$temp_dir/bad-release/execmanager-linux-x86_64"
+printf '0000000000000000000000000000000000000000000000000000000000000000  execmanager-linux-x86_64\n' > "$temp_dir/bad-release/execmanager-linux-x86_64.sha256"
+
+if checksum_failure_output="$(cd "$repo_root" && PATH='/usr/bin' INSTALL_OS=linux INSTALL_ARCH=x86_64 INSTALL_DIR="$temp_dir/protected-bin" INSTALL_BASE_URL="file://$temp_dir/bad-release" bash ./install.sh 2>&1)"; then
+  printf 'expected checksum verification failure\n' >&2
+  exit 1
+fi
+printf '%s\n' "$checksum_failure_output" | grep -Fx 'downloaded release checksum verification failed'
+"$temp_dir/protected-bin/execmanager" | grep -Fx 'old-execmanager'
+
+snapshot_output="$(cd "$repo_root" && INSTALL_OS=linux INSTALL_ARCH=x86_64 DRY_RUN=1 bash ./install.sh --snapshot)"
 printf '%s\n' "$snapshot_output" | grep -Fx 'snapshot asset: execmanager-linux-x86_64-snapshot'
-printf '%s\n' "$snapshot_output" | grep -Fx "download url: file://$temp_dir/execmanager-linux-x86_64-snapshot.zip"
+printf '%s\n' "$snapshot_output" | grep -Fx 'download url: https://github.com/xycld/execmanager/releases/download/snapshot/execmanager-linux-x86_64-snapshot'
 
-snapshot_install_output="$(cd "$repo_root" && PATH='/usr/bin' INSTALL_OS=linux INSTALL_ARCH=x86_64 INSTALL_DIR="$temp_dir/snapshot-bin" INSTALL_SNAPSHOT_RUNS_URL="file://$temp_dir/runs.json" INSTALL_SNAPSHOT_ARTIFACTS_URL="file://$temp_dir/artifacts.json" bash ./install.sh --snapshot)"
+printf '#!/usr/bin/env bash\necho execmanager-snapshot\n' > "$temp_dir/execmanager-linux-x86_64-snapshot"
+chmod +x "$temp_dir/execmanager-linux-x86_64-snapshot"
+write_release_checksum "$temp_dir/execmanager-linux-x86_64-snapshot"
+
+snapshot_install_output="$(cd "$repo_root" && PATH='/usr/bin' INSTALL_OS=linux INSTALL_ARCH=x86_64 INSTALL_DIR="$temp_dir/snapshot-bin" INSTALL_SNAPSHOT_BASE_URL="file://$temp_dir" bash ./install.sh --snapshot)"
 test -x "$temp_dir/snapshot-bin/execmanager"
 printf '%s\n' "$snapshot_install_output" | grep -Fx "installed execmanager to $temp_dir/snapshot-bin/execmanager"
 printf '%s\n' "$snapshot_install_output" | grep -Fx "Add $temp_dir/snapshot-bin to your PATH, then run:"
