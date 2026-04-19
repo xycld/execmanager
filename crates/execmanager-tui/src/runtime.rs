@@ -418,6 +418,9 @@ fn summarize_command(command: &str) -> String {
 }
 
 fn source_label(projection: &RuntimeProjection, execution: &ExecutionView) -> String {
+    if let Some(source) = &execution.source {
+        return source.clone();
+    }
     projection
         .env_snapshot(execution.exec_id.as_str())
         .and_then(|snapshot| {
@@ -431,6 +434,9 @@ fn source_label(projection: &RuntimeProjection, execution: &ExecutionView) -> St
 }
 
 fn cwd_label(projection: &RuntimeProjection, execution: &ExecutionView) -> String {
+    if let Some(working_dir) = &execution.working_dir {
+        return abbreviate_path(working_dir);
+    }
     projection
         .env_snapshot(execution.exec_id.as_str())
         .and_then(|snapshot| {

@@ -146,6 +146,8 @@ async fn daemon_rpc_launches_and_projects_real_execution() {
             serde_json::to_vec(&DaemonRequestEnvelope::Launch(execmanager_contracts::LaunchRequest {
                 tool_name: "Shell".to_string(),
                 command: command.clone(),
+                working_dir: Some(temp.path().display().to_string()),
+                source: Some("rpc-test:shell".to_string()),
             }))
             .expect("encode launch request")
             .into(),
@@ -180,6 +182,17 @@ async fn daemon_rpc_launches_and_projects_real_execution() {
     assert_eq!(execution.original_command, command);
     assert_eq!(execution.state, ProjectionState::Exited);
     assert!(projection.history_manifest(exec_id.as_str()).is_some());
+    let env_snapshot = projection
+        .env_snapshot(exec_id.as_str())
+        .expect("env snapshot exists");
+    assert!(env_snapshot
+        .entries
+        .iter()
+        .any(|entry| entry.name == "PWD" && entry.value.as_deref() == Some(&temp.path().display().to_string())));
+    assert!(env_snapshot
+        .entries
+        .iter()
+        .any(|entry| entry.name == "EXECMANAGER_SOURCE" && entry.value.as_deref() == Some("rpc-test:shell")));
 
     server.shutdown().await.expect("server shutdown");
 }

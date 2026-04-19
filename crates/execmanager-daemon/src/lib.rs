@@ -223,10 +223,12 @@ async fn launch_managed_execution(
     let journal_path = config.journal_path.clone();
     let runtime_observation_timeout = config.runtime_observation_timeout;
     let command = request.command;
+    let working_dir = request.working_dir;
+    let source = request.source.unwrap_or_else(|| request.tool_name.to_lowercase());
 
     let (exec_id, managed_child) = tokio::task::spawn_blocking(move || {
         let exec_id = next_rpc_execution_id();
-        let spec = managed_launch_spec_from_command(exec_id.clone(), &command)?;
+        let spec = managed_launch_spec_from_command(exec_id.clone(), &command, working_dir, source)?;
         let mut executor = ManagedExecutor::new(&journal_path)?;
         let child = executor
             .launch(spec)
@@ -247,19 +249,30 @@ async fn launch_managed_execution(
 fn managed_launch_spec_from_command(
     exec_id: ExecutionId,
     command: &str,
+    working_dir: Option<String>,
+    source: String,
 ) -> io::Result<ManagedLaunchSpec> {
     let argv = split_launch_command(command)?;
     let (program, args) = argv
         .split_first()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "launch command is empty"))?;
 
-    Ok(ManagedLaunchSpec::new(
+    let mut spec = ManagedLaunchSpec::new(
         exec_id,
         PathBuf::from(program),
         args.to_vec(),
         ExecutionMode::BatchPipes,
     )
-    .with_original_command(command))
+    .with_original_command(command)
+    .with_env("EXECMANAGER_SOURCE", source);
+
+    if let Some(working_dir) = working_dir {
+        spec = spec
+            .with_env("PWD", working_dir.clone())
+            .with_working_dir(PathBuf::from(working_dir));
+    }
+
+    Ok(spec)
 }
 
 fn split_launch_command(command: &str) -> io::Result<Vec<String>> {
@@ -447,6 +460,7 @@ pub struct ManagedLaunchSpec {
     pub program: std::path::PathBuf,
     pub args: Vec<String>,
     pub environment: Vec<(String, String)>,
+    pub working_dir: Option<std::path::PathBuf>,
     pub mode: ExecutionMode,
     pub original_command: String,
 }
@@ -465,6 +479,7 @@ impl ManagedLaunchSpec {
             program,
             args,
             environment: Vec::new(),
+            working_dir: None,
             mode,
             original_command,
         }
@@ -477,6 +492,11 @@ impl ManagedLaunchSpec {
 
     pub fn with_original_command(mut self, original_command: impl Into<String>) -> Self {
         self.original_command = original_command.into();
+        self
+    }
+
+    pub fn with_working_dir(mut self, working_dir: impl Into<std::path::PathBuf>) -> Self {
+        self.working_dir = Some(working_dir.into());
         self
     }
 
@@ -666,6 +686,15 @@ impl ManagedExecutor {
             exec_id: spec.exec_id.clone(),
             original_command: persisted_original_command.clone(),
             mode: spec.mode.clone(),
+            source: spec
+                .environment
+                .iter()
+                .find(|(name, _)| name == "EXECMANAGER_SOURCE")
+                .map(|(_, value)| value.clone()),
+            working_dir: spec
+                .working_dir
+                .as_ref()
+                .map(|path| path.display().to_string()),
         })?;
 
         let evaluated = evaluate_launch_policy(spec)?;
@@ -694,6 +723,9 @@ impl ManagedExecutor {
         process.args(&spec.args);
         for (name, value) in &spec.environment {
             process.env(name, value);
+        }
+        if let Some(working_dir) = &spec.working_dir {
+            process.current_dir(working_dir);
         }
         process.stdin(Stdio::null());
         process.stdout(Stdio::piped());
@@ -1187,6 +1219,8 @@ pub enum JournalEvent {
         exec_id: ExecutionId,
         original_command: String,
         mode: ExecutionMode,
+        source: Option<String>,
+        working_dir: Option<String>,
     },
     LaunchPolicyEvaluated {
         exec_id: ExecutionId,
@@ -1358,6 +1392,8 @@ pub struct ExecutionView {
     pub observed_state: ProjectionState,
     pub command: String,
     pub original_command: String,
+    pub source: Option<String>,
+    pub working_dir: Option<String>,
     pub rewritten_command: Option<String>,
     pub policy_outcome: Option<LaunchPolicyOutcome>,
     pub stdout: Option<BlobReference>,
@@ -1905,10 +1941,14 @@ impl RuntimeProjection {
                 exec_id,
                 original_command,
                 mode,
+                source,
+                working_dir,
             } => {
                 let execution = self.ensure_execution(exec_id, original_command.clone());
                 execution.command = original_command.clone();
                 execution.original_command = original_command;
+                execution.source = source;
+                execution.working_dir = working_dir;
                 execution.mode = Some(mode);
                 execution.state = ProjectionState::Unknown;
                 execution.observed_state = ProjectionState::Unknown;
@@ -2032,6 +2072,8 @@ impl RuntimeProjection {
             observed_state: ProjectionState::Unknown,
             command: command.clone(),
             original_command: command,
+            source: None,
+            working_dir: None,
             rewritten_command: None,
             policy_outcome: None,
             stdout: None,

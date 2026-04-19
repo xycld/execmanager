@@ -130,6 +130,10 @@ pub enum DegradedReason {
 pub struct LaunchRequest {
     pub tool_name: String,
     pub command: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub working_dir: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

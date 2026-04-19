@@ -112,23 +112,15 @@ fn read_action() -> Result<Option<AppAction>, RenderError> {
 fn start_journal_watcher(
     journal_path: &Path,
 ) -> notify::Result<(RecommendedWatcher, Receiver<()>)> {
-    let watch_dir = journal_path.parent().unwrap_or_else(|| Path::new("."));
-    let journal_name = journal_path.file_name().map(|name| name.to_os_string());
+    let watch_root = journal_path.parent().unwrap_or_else(|| Path::new("."));
     let (tx, rx) = mpsc::channel();
     let mut watcher = notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
         if let Ok(event) = result {
-            let matches_journal = event.paths.iter().any(|path| {
-                journal_name
-                    .as_ref()
-                    .map(|name| path.file_name() == Some(name.as_os_str()))
-                    .unwrap_or(false)
-            });
-            if matches_journal && matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_))
-            {
+            if matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
                 let _ = tx.send(());
             }
         }
     })?;
-    watcher.watch(watch_dir, RecursiveMode::NonRecursive)?;
+    watcher.watch(watch_root, RecursiveMode::Recursive)?;
     Ok((watcher, rx))
 }

@@ -95,13 +95,17 @@ fn contract_json_shapes_are_locked() {
     let launch = DaemonRequestEnvelope::Launch(LaunchRequest {
         tool_name: "Shell".to_string(),
         command: "echo managed".to_string(),
+        working_dir: Some("/workspace/demo".to_string()),
+        source: Some("kimi:shell".to_string()),
     });
     assert_json(
         serde_json::to_value(&launch).expect("serialize launch request"),
         json!({
             "type": "launch",
             "tool_name": "Shell",
-            "command": "echo managed"
+            "command": "echo managed",
+            "working_dir": "/workspace/demo",
+            "source": "kimi:shell"
         }),
     );
 

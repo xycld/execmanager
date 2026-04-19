@@ -33,6 +33,8 @@ fn viewer_attachment_requires_daemon_handle_and_never_assumes_execution_ownershi
         observed_state: execmanager_contracts::ProjectionState::Service,
         command: "python3 -m http.server".to_string(),
         original_command: "python3 -m http.server".to_string(),
+        source: Some("kimi:shell".to_string()),
+        working_dir: Some("/workspace/demo".to_string()),
         rewritten_command: None,
         policy_outcome: None,
         stdout: Some(BlobReference {

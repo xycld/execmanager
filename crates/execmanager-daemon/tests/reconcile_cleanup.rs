@@ -15,6 +15,8 @@ fn append_spawned_execution(
             exec_id: exec_id.clone(),
             original_command: "/bin/sleep 30".to_string(),
             mode: ExecutionMode::BatchPipes,
+            source: Some("test:shell".to_string()),
+            working_dir: Some("/tmp/reconcile".to_string()),
         })
         .expect("append launch requested");
     journal

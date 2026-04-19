@@ -91,6 +91,8 @@ fn tui_displays_managed_service_lifecycle() {
             exec_id: exec_id.clone(),
             original_command: "npm run dev".to_string(),
             mode: ExecutionMode::BatchPipes,
+            source: Some("kimi:shell".to_string()),
+            working_dir: Some("/workspace/app".to_string()),
         },
         JournalEvent::LaunchPolicyEvaluated {
             exec_id: exec_id.clone(),
@@ -152,6 +154,8 @@ fn tui_displays_managed_service_lifecycle() {
         "Ghosts/Reconcile",
         "Instance Detail",
         "exec-tui-service-001",
+        "source: kimi:shell",
+        "cwd: /workspace/app",
         "effective state: service",
         "original command: npm run dev",
         "rewritten launch spec: env PORT=4173 npm run dev",
@@ -187,6 +191,8 @@ fn degraded_state_is_visible() {
             exec_id: exec_id.clone(),
             original_command: "python -m http.server".to_string(),
             mode: ExecutionMode::BatchPipes,
+            source: Some("kimi:shell".to_string()),
+            working_dir: Some("/workspace/lab".to_string()),
         },
         JournalEvent::LaunchPolicyEvaluated {
             exec_id: exec_id.clone(),

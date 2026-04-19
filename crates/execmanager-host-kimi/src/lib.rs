@@ -108,7 +108,7 @@ pub async fn route_tool_call(
 
 async fn route_supported_shell(
     socket_path: &Path,
-    _tool_name: &str,
+    tool_name: &str,
     shell: ShellToolCall,
 ) -> Result<ManagedExecProof, IngressError> {
     let stream = UnixStream::connect(socket_path)
@@ -148,8 +148,12 @@ async fn route_supported_shell(
     }
 
     let request = DaemonRequestEnvelope::Launch(LaunchRequest {
-        tool_name: "Shell".to_string(),
+        tool_name: tool_name.to_string(),
         command: shell.command.clone(),
+        working_dir: std::env::current_dir()
+            .ok()
+            .map(|path| path.display().to_string()),
+        source: Some(format!("kimi:{}", tool_name.to_lowercase())),
     });
     send_request(&mut framed, &request).await?;
 
