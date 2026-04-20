@@ -11,6 +11,7 @@ execmanager-daemon = { path = "../execmanager-daemon" }
 execmanager-platform = { path = "../execmanager-platform" }
 libc = "0.2"
 notify = "8.0"
+ratatui = "0.29"
 
 [dev-dependencies]
 tempfile = "3.10"

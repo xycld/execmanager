@@ -270,7 +270,8 @@ fn smart_entry_launches_tui_when_initialized_and_interactive() {
     assert!(output.contains("Services"));
     assert!(output.contains("History"));
     assert!(output.contains("Ghosts/Reconcile"));
-    assert!(output.contains("Detail"));
+    assert!(output.contains("Selection Summary / Recent State"));
+    assert!(output.contains("Recent stdout / stderr"));
 }
 
 #[test]

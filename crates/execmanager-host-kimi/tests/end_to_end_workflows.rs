@@ -195,8 +195,8 @@ async fn managed_dev_server_appears_and_opens_viewer() {
         &format!("service observed_service -> tcp:{port}"),
         "launch_requested",
         "process_spawned",
-        "service_observed",
-        "port_observed",
+        "Selection Summary / Recent State",
+        "Recent stdout / stderr",
     ] {
         assert!(
             rendered.contains(expected),
@@ -366,7 +366,7 @@ async fn rm_safety_rewrite_is_visible_in_tui_history() {
         "policy: rewritten by rm_safety_adapter",
         "launch_requested",
         "launch_policy_evaluated",
-        "history_snapshot_recorded",
+        "Selection Summary / Recent State",
     ] {
         assert!(
             rendered.contains(expected),

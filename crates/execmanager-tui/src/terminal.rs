@@ -1,5 +1,5 @@
 use std::{
-    io::{self, Write},
+    io,
     path::Path,
     sync::mpsc::{self, Receiver},
     time::Duration,
@@ -12,6 +12,7 @@ use crossterm::{
     terminal::{self, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use ratatui::{backend::CrosstermBackend, Terminal};
 
 use crate::{
     app::{AppAction, DashboardApp},
@@ -41,12 +42,16 @@ impl Drop for TerminalGuard {
 pub fn run_dashboard(journal_path: &Path) -> Result<(), RenderError> {
     let _guard =
         TerminalGuard::enter().map_err(|error| RenderError::Terminal(error.to_string()))?;
+    let stdout = io::stdout();
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal =
+        Terminal::new(backend).map_err(|error| RenderError::Terminal(error.to_string()))?;
     let mut app = DashboardApp::new(load_dashboard_model(journal_path)?);
     let (_watcher, rx) = start_journal_watcher(journal_path)
         .map_err(|error| RenderError::Terminal(error.to_string()))?;
 
     loop {
-        draw(&app)?;
+        draw(&mut terminal, &app)?;
 
         while let Ok(()) = rx.try_recv() {
             app.replace_model(load_dashboard_model(journal_path)?);
@@ -72,20 +77,15 @@ pub fn run_dashboard(journal_path: &Path) -> Result<(), RenderError> {
     Ok(())
 }
 
-fn draw(app: &DashboardApp) -> Result<(), RenderError> {
-    let screen = crate::render_dashboard(app, true);
-    let mut stdout = io::stdout();
-    execute!(
-        stdout,
-        terminal::Clear(terminal::ClearType::All),
-        cursor::MoveTo(0, 0)
-    )
-    .map_err(|error| RenderError::Terminal(error.to_string()))?;
-    stdout
-        .write_all(screen.as_bytes())
-        .map_err(|error| RenderError::Terminal(error.to_string()))?;
-    stdout
-        .flush()
+fn draw(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    app: &DashboardApp,
+) -> Result<(), RenderError> {
+    terminal
+        .draw(|frame| {
+            let area = frame.area();
+            crate::render_dashboard_buffer(app, None, area, frame.buffer_mut());
+        })
         .map_err(|error| RenderError::Terminal(error.to_string()))?;
     Ok(())
 }

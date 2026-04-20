@@ -10,7 +10,12 @@ use execmanager_platform::{
     EnforcementGap, GovernanceCapability, GovernancePlatform, GovernanceSnapshot, PlacementState,
     ResourceMetrics, ResourceProfile,
 };
-use execmanager_tui::{render_screen, PaneUiState, PrimaryView};
+use execmanager_tui::{
+    app::DashboardApp,
+    render_dashboard, render_screen,
+    runtime::{DashboardModel, DashboardView, PressureLevel},
+    PaneUiState, PrimaryView,
+};
 use tempfile::tempdir;
 
 fn linux_governance_snapshot() -> GovernanceSnapshot {
@@ -152,7 +157,7 @@ fn tui_displays_managed_service_lifecycle() {
         "Services",
         "History",
         "Ghosts/Reconcile",
-        "Instance Detail",
+        "Selected: npm run dev",
         "exec-tui-service-001",
         "source: kimi:shell",
         "cwd: /workspace/app",
@@ -168,9 +173,7 @@ fn tui_displays_managed_service_lifecycle() {
         "launch_requested",
         "launch_policy_evaluated",
         "process_spawned",
-        "resource_governance_recorded",
-        "service_observed",
-        "port_observed",
+        "[Instances]",
     ] {
         assert!(
             rendered.contains(expected),
@@ -267,19 +270,103 @@ fn degraded_state_is_visible() {
         "Services",
         "History",
         "Ghosts/Reconcile",
-        "Instance Detail",
+        "Selected: none",
         "exec-tui-degraded-001",
         "replay degraded: journal corruption at offset",
         "resource governance: observable_only",
-        "degraded: macOS has no cgroup placement path; degraded governance must stay explicit",
+        "degraded: macOS has no cgroup placement path; degraded governance must stay",
+        "explicit",
         "runtime state: detached",
-        "ghost detached: managed root process is gone but runtime artifacts were previously observed",
+        "ghost detached: managed root process is gone but runtime artifacts were",
+        "previously observed",
         "policy: allowed_as_requested by default_allow",
         "observability degraded",
+        "[Instances]",
     ] {
         assert!(
             rendered.contains(expected),
             "rendered degraded TUI should contain {expected:?}, got:\n{rendered}"
+        );
+    }
+}
+
+#[test]
+fn empty_dashboard_uses_structured_empty_states() {
+    let app = DashboardApp::new(DashboardModel {
+        instances: Vec::new(),
+        services: Vec::new(),
+        history: Vec::new(),
+        ghosts: Vec::new(),
+    });
+
+    let rendered = render_dashboard(&app, false);
+
+    for expected in [
+        "Running instances: 0",
+        "High pressure: 0",
+        "No running instances",
+        "AI-triggered commands will appear here while they are",
+        "still running.",
+        "Selection Summary / Recent State",
+        "Select a running instance to inspect its runtime, resources, services, and",
+        "recent output.",
+        "Recent stdout / stderr",
+        "No logs yet",
+        "[Instances]",
+        "Ghosts/Reconcile",
+    ] {
+        assert!(
+            rendered.contains(expected),
+            "rendered TUI should contain {expected:?}, got:\n{rendered}"
+        );
+    }
+}
+
+#[test]
+fn dashboard_uses_three_section_layout_copy() {
+    let app = DashboardApp::new(DashboardModel {
+        instances: vec![DashboardView::new(
+            "exec-demo",
+            "cargo test",
+            "1m 2s | kimi:shell | /workspace/demo | healthy",
+            PressureLevel::Healthy,
+            vec![
+                "Identity".to_string(),
+                "source: kimi:shell".to_string(),
+                "cwd: /workspace/demo".to_string(),
+                "Runtime / Resources".to_string(),
+                "runtime: 1m 2s".to_string(),
+                "Service / Ports".to_string(),
+                "no observed services".to_string(),
+                "Selection Summary / Recent State".to_string(),
+                "healthy and stable".to_string(),
+                "Recent stdout / stderr".to_string(),
+                "ready".to_string(),
+            ],
+        )],
+        services: Vec::new(),
+        history: Vec::new(),
+        ghosts: Vec::new(),
+    });
+
+    let rendered = render_dashboard(&app, false);
+
+    for expected in [
+        "ExecManager Dashboard",
+        "[Instances]",
+        "Running instances: 1",
+        "High pressure: 0",
+        "Global load:",
+        "Selected: cargo test",
+        "Identity",
+        "Runtime / Resources",
+        "Service / Ports",
+        "Selection Summary / Recent State",
+        "Recent stdout / stderr",
+    ] {
+        assert!(
+            rendered.contains(expected),
+            "rendered TUI should contain {expected:?}, got:\n{rendered}"
         );
     }
 }
